@@ -104,6 +104,11 @@ final class GeneratedJavaParser extends GeneratedJavaParserBase {
         return token.javaToken;
     }
 
+    /* Returns the last matched token */
+    Token getCurrentToken() {
+        return token;
+    }
+
     /* Changes the amount by which the horizontal position is increased when a tab character is encountered.
         One by default.*/
     void setTabSize(int size) {
@@ -1368,6 +1373,7 @@ RecordDeclaration RecordDeclaration(ModifierHolder modifier):
     JavaToken begin = modifier.begin;
 }
 {
+    // Note that BlockStatement and ClassOrInterfaceBodyDeclaration have extended lookaheads that should be maintained
     // Note that `record` is a "restricted identifier", not a keyword - JLS 3.9 has more detail.
     "record" { begin = orIfInvalid(begin, token()); }
     name = SimpleName()
@@ -1885,7 +1891,7 @@ BodyDeclaration<?> ClassOrInterfaceBodyDeclaration():
         (
             ret = ClassOrInterfaceDeclaration(modifiers)
          |
-            LOOKAHEAD("record")
+            LOOKAHEAD("record" SimpleName() [ TypeParameters() ] Parameters() )
             ret = RecordDeclaration(modifiers)
          |
             LOOKAHEAD("enum")
@@ -2963,16 +2969,7 @@ Expression Expression():
             "->"
             lambdaBody = LambdaBody()
             {
-                if (ret instanceof CastExpr) {
-                    ret = generateLambda(ret, lambdaBody);
-                } else if (ret instanceof ConditionalExpr) {
-                    ConditionalExpr ce = (ConditionalExpr) ret;
-                    if(ce.getElseExpr() != null) {
-                        ce.setElseExpr(generateLambda(ce.getElseExpr(), lambdaBody));
-                    }
-                } else {
-                    ret = generateLambda(ret, lambdaBody);
-                }
+                ret = generateLambda(ret, lambdaBody);
             }
          |
             "::"
@@ -3045,7 +3042,7 @@ Expression ConditionalExpression():
         "?"
         left = Expression()
         ":"
-        right = ConditionalExpression()
+        right = Expression()
         // TODO: Examine further re: missing(?) {@code LambdaExpression} or whether it is permissive enough to include it.
         {
             ret = new ConditionalExpr(range(ret, token()), ret, left, right);
@@ -4173,7 +4170,7 @@ Statement Statement():
         )
         { return ret; }
     } catch (ParseException e) {
-        TokenRange errorRange = recover(SEMICOLON, e);
+        TokenRange errorRange = recoverStatement(SEMICOLON, LBRACE, RBRACE, e);
         return new UnparsableStmt(errorRange);
     }
 }
@@ -4302,11 +4299,12 @@ Statement BlockStatement():
             modifier = Modifiers()
             typeDecl = ClassOrInterfaceDeclaration(modifier) { ret = new LocalClassDeclarationStmt(range(typeDecl, token()), typeDecl); }
          |
-            LOOKAHEAD( Modifiers() "record" )
+            // Extended lookahead required to allow for e.g. `record.toString()` where looking past "record" is required for disambiguation
+            LOOKAHEAD( Modifiers() "record" SimpleName() [ TypeParameters() ] Parameters() )
             modifier = Modifiers()
             recordDeclaration = RecordDeclaration(modifier) { ret = new LocalRecordDeclarationStmt(range(recordDeclaration, token()), recordDeclaration); }
          |
-            LOOKAHEAD(VariableDeclarationExpression() )
+            LOOKAHEAD( VariableDeclarationExpression() )
             expr = VariableDeclarationExpression()
             ";"
             { ret = new ExpressionStmt(range(expr, token()), expr); }
@@ -4315,7 +4313,7 @@ Statement BlockStatement():
         )
         { return ret; }
     } catch (ParseException e) {
-        TokenRange errorRange = recover(SEMICOLON, e);
+        TokenRange errorRange = recoverStatement(SEMICOLON, LBRACE, RBRACE, e);
         return new UnparsableStmt(errorRange);
     }
 }
@@ -4560,7 +4558,7 @@ SwitchEntry SwitchEntry():
             ";"
             {
                 TokenRange r=range(begin, token());
-                stmts.add(new ExpressionStmt(r, expression));
+                stmts.add(new ExpressionStmt(expression.getTokenRange().get(), expression));
                 ret = new SwitchEntry(r, labels, EXPRESSION, stmts);
             }
          |
