@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2007-2010 Júlio Vilmar Gesser.
- * Copyright (C) 2011, 2013-2019 The JavaParser Team.
+ * Copyright (C) 2011, 2013-2026 The JavaParser Team.
  *
  * This file is part of JavaParser.
  *
@@ -21,25 +21,26 @@
 
 package com.github.javaparser;
 
-import com.github.javaparser.ast.CompilationUnit;
-import com.github.javaparser.ast.stmt.SwitchEntry;
-import org.junit.jupiter.api.Test;
-
-import java.io.IOException;
-import java.nio.file.Path;
-
-import static com.github.javaparser.StaticJavaParser.parse;
 import static com.github.javaparser.utils.CodeGenerationUtils.mavenModuleRoot;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
+import com.github.javaparser.ast.CompilationUnit;
+import com.github.javaparser.ast.stmt.SwitchEntry;
+import java.io.IOException;
+import java.nio.file.Path;
+import org.junit.jupiter.api.Test;
+
 public class TokenTypesTest {
+
+    private final JavaParserAdapter parser = StaticJavaParser.newParserAdapter();
 
     @Test
     void everyTokenHasACategory() throws IOException {
         final int tokenCount = GeneratedJavaParserConstants.tokenImage.length;
-        Path tokenTypesPath = mavenModuleRoot(JavaParserTest.class).resolve("../javaparser-core/src/main/java/com/github/javaparser/TokenTypes.java");
-        CompilationUnit tokenTypesCu = parse(tokenTypesPath);
+        Path tokenTypesPath = mavenModuleRoot(JavaParserTest.class)
+                .resolve("../javaparser-core/src/main/java/com/github/javaparser/TokenTypes.java");
+        CompilationUnit tokenTypesCu = parser.parse(tokenTypesPath);
 
         // -1 to take off the default: case.
         int switchEntries = tokenTypesCu.findAll(SwitchEntry.class).size() - 1;
@@ -54,5 +55,4 @@ public class TokenTypesTest {
             TokenTypes.getCategory(-1);
         });
     }
-
 }

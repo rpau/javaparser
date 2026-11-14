@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2007-2010 Júlio Vilmar Gesser.
- * Copyright (C) 2011, 2013-2021 The JavaParser Team.
+ * Copyright (C) 2011, 2013-2026 The JavaParser Team.
  *
  * This file is part of JavaParser.
  *
@@ -18,7 +18,6 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU Lesser General Public License for more details.
  */
-
 package com.github.javaparser.ast.validator.language_level_validations.chunks;
 
 import com.github.javaparser.ast.expr.IntegerLiteralExpr;
@@ -26,8 +25,10 @@ import com.github.javaparser.ast.expr.LiteralStringValueExpr;
 import com.github.javaparser.ast.expr.LongLiteralExpr;
 import com.github.javaparser.ast.validator.ProblemReporter;
 import com.github.javaparser.ast.validator.VisitorValidator;
+import java.util.Locale;
 
 public class NoBinaryIntegerLiteralsValidator extends VisitorValidator {
+
     @Override
     public void visit(IntegerLiteralExpr n, ProblemReporter arg) {
         validate(n, arg);
@@ -41,7 +42,7 @@ public class NoBinaryIntegerLiteralsValidator extends VisitorValidator {
     }
 
     private static void validate(LiteralStringValueExpr n, ProblemReporter arg) {
-        if (n.getValue().toUpperCase().startsWith("0B")) {
+        if (n.getValue().toUpperCase(Locale.ROOT).startsWith("0B")) {
             arg.report(n, "Binary literal values are not supported.");
         }
     }

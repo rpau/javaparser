@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2007-2010 Júlio Vilmar Gesser.
- * Copyright (C) 2011, 2013-2019 The JavaParser Team.
+ * Copyright (C) 2011, 2013-2026 The JavaParser Team.
  *
  * This file is part of JavaParser.
  *
@@ -21,20 +21,23 @@
 
 package com.github.javaparser.steps;
 
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.notNullValue;
+import static org.hamcrest.core.Is.is;
+
 import com.github.javaparser.HasParentNode;
-import com.github.javaparser.ast.*;
+import com.github.javaparser.ast.ArrayCreationLevel;
+import com.github.javaparser.ast.CompilationUnit;
+import com.github.javaparser.ast.NodeList;
+import com.github.javaparser.ast.PackageDeclaration;
 import com.github.javaparser.ast.body.*;
 import com.github.javaparser.ast.comments.BlockComment;
-import com.github.javaparser.ast.comments.JavadocComment;
 import com.github.javaparser.ast.comments.LineComment;
+import com.github.javaparser.ast.comments.TraditionalJavadocComment;
 import com.github.javaparser.ast.expr.*;
 import com.github.javaparser.ast.stmt.*;
 import com.github.javaparser.ast.type.*;
 import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
-
-import static org.hamcrest.Matchers.notNullValue;
-import static org.hamcrest.core.Is.is;
-import static org.hamcrest.MatcherAssert.assertThat;
 
 /**
  * The <code>ExistenceOfParentNodeVerifier</code> verifies that each node of the compilation unit has a parent set.
@@ -277,7 +280,7 @@ class ExistenceOfParentNodeVerifier {
         }
 
         @Override
-        public void visit(JavadocComment n, Void arg) {
+        public void visit(TraditionalJavadocComment n, Void arg) {
             super.visit(n, arg);
         }
 
@@ -479,6 +482,12 @@ class ExistenceOfParentNodeVerifier {
         }
 
         @Override
+        public void visit(final LocalEnumDeclarationStmt n, final Void arg) {
+            assertParentIsSet(n);
+            super.visit(n, arg);
+        }
+
+        @Override
         public void visit(LocalRecordDeclarationStmt n, Void arg) {
             assertParentIsSet(n);
             super.visit(n, arg);
@@ -544,5 +553,4 @@ class ExistenceOfParentNodeVerifier {
             super.visit(n, arg);
         }
     }
-
 }

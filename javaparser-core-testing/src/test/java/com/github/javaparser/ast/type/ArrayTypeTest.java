@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2007-2010 Júlio Vilmar Gesser.
- * Copyright (C) 2011, 2013-2019 The JavaParser Team.
+ * Copyright (C) 2011, 2013-2026 The JavaParser Team.
  *
  * This file is part of JavaParser.
  *
@@ -21,6 +21,11 @@
 
 package com.github.javaparser.ast.type;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
+import com.github.javaparser.JavaParserAdapter;
+import com.github.javaparser.StaticJavaParser;
 import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.Parameter;
@@ -29,17 +34,17 @@ import com.github.javaparser.ast.expr.MarkerAnnotationExpr;
 import com.github.javaparser.ast.expr.VariableDeclarationExpr;
 import com.github.javaparser.ast.stmt.ExpressionStmt;
 import com.github.javaparser.printer.ConcreteSyntaxModel;
+import com.github.javaparser.utils.LineSeparator;
 import org.junit.jupiter.api.Test;
 
-import static com.github.javaparser.StaticJavaParser.*;
-import static com.github.javaparser.utils.Utils.SYSTEM_EOL;
-import static org.assertj.core.api.Assertions.*;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-
 class ArrayTypeTest {
+
+    private final JavaParserAdapter parser = StaticJavaParser.newParserAdapter();
+
     @Test
     void getFieldDeclarationWithArrays() {
-        FieldDeclaration fieldDeclaration = parseBodyDeclaration("@C int @A[] @B[] a @X[] @Y[];").asFieldDeclaration();
+        FieldDeclaration fieldDeclaration =
+                parser.parseBodyDeclaration("@C int @A[] @B[] a @X[] @Y[];").asFieldDeclaration();
 
         ArrayType arrayType1 = fieldDeclaration.getVariable(0).getType().asArrayType();
         ArrayType arrayType2 = arrayType1.getComponentType().asArrayType();
@@ -47,21 +52,23 @@ class ArrayTypeTest {
         ArrayType arrayType4 = arrayType3.getComponentType().asArrayType();
         PrimitiveType elementType = arrayType4.getComponentType().asPrimitiveType();
 
-        assertThat(arrayType1.getAnnotations()).containsExactly(new MarkerAnnotationExpr(parseName("X")));
-        assertThat(arrayType2.getAnnotations()).containsExactly(new MarkerAnnotationExpr(parseName("Y")));
-        assertThat(arrayType3.getAnnotations()).containsExactly(new MarkerAnnotationExpr(parseName("A")));
-        assertThat(arrayType4.getAnnotations()).containsExactly(new MarkerAnnotationExpr(parseName("B")));
+        assertThat(arrayType1.getAnnotations()).containsExactly(new MarkerAnnotationExpr(parser.parseName("X")));
+        assertThat(arrayType2.getAnnotations()).containsExactly(new MarkerAnnotationExpr(parser.parseName("Y")));
+        assertThat(arrayType3.getAnnotations()).containsExactly(new MarkerAnnotationExpr(parser.parseName("A")));
+        assertThat(arrayType4.getAnnotations()).containsExactly(new MarkerAnnotationExpr(parser.parseName("B")));
 
         assertThat(elementType.getType()).isEqualTo(PrimitiveType.Primitive.INT);
-        assertThat(fieldDeclaration.getAnnotations()).containsExactly(new MarkerAnnotationExpr(parseName("C")));
+        assertThat(fieldDeclaration.getAnnotations()).containsExactly(new MarkerAnnotationExpr(parser.parseName("C")));
 
         assertThat(arrayType1.getParentNode().get().getParentNode().get()).isSameAs(fieldDeclaration);
     }
 
     @Test
     void getVariableDeclarationWithArrays() {
-        ExpressionStmt variableDeclarationStatement = parseStatement("@C int @A[] @B[] a @X[] @Y[];").asExpressionStmt();
-        VariableDeclarationExpr variableDeclarationExpr = variableDeclarationStatement.getExpression().asVariableDeclarationExpr();
+        ExpressionStmt variableDeclarationStatement =
+                parser.parseStatement("@C int @A[] @B[] a @X[] @Y[];").asExpressionStmt();
+        VariableDeclarationExpr variableDeclarationExpr =
+                variableDeclarationStatement.getExpression().asVariableDeclarationExpr();
 
         ArrayType arrayType1 = variableDeclarationExpr.getVariable(0).getType().asArrayType();
         ArrayType arrayType2 = arrayType1.getComponentType().asArrayType();
@@ -69,36 +76,39 @@ class ArrayTypeTest {
         ArrayType arrayType4 = arrayType3.getComponentType().asArrayType();
         PrimitiveType elementType = arrayType4.getComponentType().asPrimitiveType();
 
-        assertThat(arrayType1.getAnnotations()).containsExactly(new MarkerAnnotationExpr(parseName("X")));
-        assertThat(arrayType2.getAnnotations()).containsExactly(new MarkerAnnotationExpr(parseName("Y")));
-        assertThat(arrayType3.getAnnotations()).containsExactly(new MarkerAnnotationExpr(parseName("A")));
-        assertThat(arrayType4.getAnnotations()).containsExactly(new MarkerAnnotationExpr(parseName("B")));
+        assertThat(arrayType1.getAnnotations()).containsExactly(new MarkerAnnotationExpr(parser.parseName("X")));
+        assertThat(arrayType2.getAnnotations()).containsExactly(new MarkerAnnotationExpr(parser.parseName("Y")));
+        assertThat(arrayType3.getAnnotations()).containsExactly(new MarkerAnnotationExpr(parser.parseName("A")));
+        assertThat(arrayType4.getAnnotations()).containsExactly(new MarkerAnnotationExpr(parser.parseName("B")));
 
         assertThat(elementType.getType()).isEqualTo(PrimitiveType.Primitive.INT);
-        assertThat(variableDeclarationExpr.getAnnotations()).containsExactly(new MarkerAnnotationExpr(parseName("C")));
+        assertThat(variableDeclarationExpr.getAnnotations())
+                .containsExactly(new MarkerAnnotationExpr(parser.parseName("C")));
 
         assertThat(arrayType1.getParentNode().get().getParentNode().get()).isSameAs(variableDeclarationExpr);
     }
 
     @Test
     void getMethodDeclarationWithArrays() {
-        MethodDeclaration methodDeclaration = parseBodyDeclaration("@C int @A[] a() @B[] {}").asMethodDeclaration();
+        MethodDeclaration methodDeclaration =
+                parser.parseBodyDeclaration("@C int @A[] a() @B[] {}").asMethodDeclaration();
 
         ArrayType arrayType1 = methodDeclaration.getType().asArrayType();
         ArrayType arrayType2 = arrayType1.getComponentType().asArrayType();
         Type elementType = arrayType2.getComponentType();
         assertThat(elementType).isInstanceOf(PrimitiveType.class);
 
-        assertThat(arrayType1.getAnnotations()).containsExactly(new MarkerAnnotationExpr(parseName("B")));
-        assertThat(arrayType2.getAnnotations()).containsExactly(new MarkerAnnotationExpr(parseName("A")));
-        assertThat(methodDeclaration.getAnnotations()).containsExactly(new MarkerAnnotationExpr(parseName("C")));
+        assertThat(arrayType1.getAnnotations()).containsExactly(new MarkerAnnotationExpr(parser.parseName("B")));
+        assertThat(arrayType2.getAnnotations()).containsExactly(new MarkerAnnotationExpr(parser.parseName("A")));
+        assertThat(methodDeclaration.getAnnotations()).containsExactly(new MarkerAnnotationExpr(parser.parseName("C")));
 
         assertThat(methodDeclaration.getType().getParentNode().get()).isSameAs(methodDeclaration);
     }
 
     @Test
     void getParameterWithArrays() {
-        MethodDeclaration methodDeclaration = parseBodyDeclaration("void a(@C int @A[] a @B[]) {}").asMethodDeclaration();
+        MethodDeclaration methodDeclaration =
+                parser.parseBodyDeclaration("void a(@C int @A[] a @B[]) {}").asMethodDeclaration();
 
         Parameter parameter = methodDeclaration.getParameter(0);
 
@@ -108,78 +118,122 @@ class ArrayTypeTest {
         PrimitiveType elementType = innerArrayType.getComponentType().asPrimitiveType();
 
         assertThat(elementType).isInstanceOf(PrimitiveType.class);
-        assertThat(outerArrayType.getAnnotations()).containsExactly(new MarkerAnnotationExpr(parseName("B")));
-        assertThat(innerArrayType.getAnnotations()).containsExactly(new MarkerAnnotationExpr(parseName("A")));
-        assertThat(parameter.getAnnotations()).containsExactly(new MarkerAnnotationExpr(parseName("C")));
+        assertThat(outerArrayType.getAnnotations()).containsExactly(new MarkerAnnotationExpr(parser.parseName("B")));
+        assertThat(innerArrayType.getAnnotations()).containsExactly(new MarkerAnnotationExpr(parser.parseName("A")));
+        assertThat(parameter.getAnnotations()).containsExactly(new MarkerAnnotationExpr(parser.parseName("C")));
 
         assertThat(parameter.getType().getParentNode().get()).isSameAs(parameter);
     }
 
     @Test
     void setVariableDeclarationWithArrays() {
-        ExpressionStmt variableDeclarationStatement = parseStatement("@C int @A[] @B[] a @X[] @Y[];").asExpressionStmt();
-        VariableDeclarationExpr variableDeclarationExpr = variableDeclarationStatement.getExpression().asVariableDeclarationExpr();
+        ExpressionStmt variableDeclarationStatement =
+                parser.parseStatement("@C int @A[] @B[] a @X[] @Y[];").asExpressionStmt();
+        VariableDeclarationExpr variableDeclarationExpr =
+                variableDeclarationStatement.getExpression().asVariableDeclarationExpr();
 
         variableDeclarationExpr.getVariable(0).setType(new ArrayType(new ArrayType(PrimitiveType.intType())));
-        assertEquals("@C" + SYSTEM_EOL + "int[][] a;", variableDeclarationStatement.toString());
+        assertEquals("@C" + LineSeparator.SYSTEM + "int[][] a;", variableDeclarationStatement.toString());
     }
 
     @Test
     void setFieldDeclarationWithArrays() {
-        FieldDeclaration fieldDeclaration = parseBodyDeclaration("int[][] a[][];").asFieldDeclaration();
-        fieldDeclaration.getVariable(0).setType(new ArrayType(new ArrayType(parseClassOrInterfaceType("Blob"))));
+        FieldDeclaration fieldDeclaration =
+                parser.parseBodyDeclaration("int[][] a[][];").asFieldDeclaration();
+        fieldDeclaration.getVariable(0).setType(new ArrayType(new ArrayType(parser.parseClassOrInterfaceType("Blob"))));
 
         assertEquals("Blob[][] a;", fieldDeclaration.toString());
     }
 
     @Test
     void setMethodDeclarationWithArrays() {
-        MethodDeclaration method = parseBodyDeclaration("int[][] a()[][] {}").asMethodDeclaration();
-        method.setType(new ArrayType(new ArrayType(parseClassOrInterfaceType("Blob"))));
+        MethodDeclaration method =
+                parser.parseBodyDeclaration("int[][] a()[][] {}").asMethodDeclaration();
+        method.setType(new ArrayType(new ArrayType(parser.parseClassOrInterfaceType("Blob"))));
 
-        assertEquals("Blob[][] a() {" + SYSTEM_EOL + "}", method.toString());
+        assertEquals("Blob[][] a() {" + LineSeparator.SYSTEM + "}", method.toString());
     }
 
     @Test
     void fieldDeclarationWithArraysHasCorrectOrigins() {
-        FieldDeclaration fieldDeclaration = parseBodyDeclaration("int[] a[];").asFieldDeclaration();
+        FieldDeclaration fieldDeclaration =
+                parser.parseBodyDeclaration("int[] a[];").asFieldDeclaration();
 
         Type outerType = fieldDeclaration.getVariables().get(0).getType();
         assertEquals(ArrayType.Origin.NAME, outerType.asArrayType().getOrigin());
-        assertEquals(ArrayType.Origin.TYPE, outerType.asArrayType().getComponentType().asArrayType().getOrigin());
+        assertEquals(
+                ArrayType.Origin.TYPE,
+                outerType.asArrayType().getComponentType().asArrayType().getOrigin());
     }
 
     @Test
     void methodDeclarationWithArraysHasCorrectOrigins() {
-        MethodDeclaration method = (MethodDeclaration) parseBodyDeclaration("int[] a()[] {}");
+        MethodDeclaration method = (MethodDeclaration) parser.parseBodyDeclaration("int[] a()[] {}");
 
         Type outerType = method.getType();
         assertEquals(ArrayType.Origin.NAME, outerType.asArrayType().getOrigin());
-        assertEquals(ArrayType.Origin.TYPE, outerType.asArrayType().getComponentType().asArrayType().getOrigin());
+        assertEquals(
+                ArrayType.Origin.TYPE,
+                outerType.asArrayType().getComponentType().asArrayType().getOrigin());
     }
 
     @Test
     void setParameterWithArrays() {
-        MethodDeclaration method = parseBodyDeclaration("void a(int[][] a[][]) {}").asMethodDeclaration();
-        method.getParameter(0).setType(new ArrayType(new ArrayType(parseClassOrInterfaceType("Blob"))));
+        MethodDeclaration method =
+                parser.parseBodyDeclaration("void a(int[][] a[][]) {}").asMethodDeclaration();
+        method.getParameter(0).setType(new ArrayType(new ArrayType(parser.parseClassOrInterfaceType("Blob"))));
 
-        assertEquals("void a(Blob[][] a) {" + SYSTEM_EOL + "}", method.toString());
+        assertEquals("void a(Blob[][] a) {" + LineSeparator.SYSTEM + "}", method.toString());
     }
 
     @Test
     void getArrayCreationType() {
-        ArrayCreationExpr expr = parseExpression("new int[]");
+        ArrayCreationExpr expr = parser.parseExpression("new int[]");
         ArrayType outerType = expr.createdType().asArrayType();
         Type innerType = outerType.getComponentType();
         assertThat(innerType).isEqualTo(expr.getElementType());
     }
 
+    /**
+     * The form parsed here is not legal Java, see {@link #ellipsisCanHaveAnnotationsTooWithLegalNotation()}, but
+     * JavaParser accepts it. The pretty printer moves the brackets to the type, the concrete syntax model writes them
+     * where the source has them, after the name.
+     */
     @Test
     void ellipsisCanHaveAnnotationsToo() {
-        Parameter p = parseParameter("int[]@X...a[]");
+        Parameter p = parser.parseParameter("int[]@X...a[]");
 
-        assertThat(p.getVarArgsAnnotations()).containsExactly(new MarkerAnnotationExpr(parseName("X")));
+        assertThat(p.getVarArgsAnnotations()).containsExactly(new MarkerAnnotationExpr(parser.parseName("X")));
+        assertEquals("int[][]@X ... a", p.toString());
+        assertEquals("int[]@X... a[]", ConcreteSyntaxModel.genericPrettyPrint(p));
+    }
+
+    /**
+     * The legal form of {@link #ellipsisCanHaveAnnotationsToo()}. Brackets after the name of a variable arity
+     * parameter ({@code ...a[]}) are not legal Java since Java 8: JLS 8.4.1 only allows an identifier after the
+     * ellipsis, and javac (from 8 to 21 at least) reports "legacy array notation not allowed on variable-arity
+     * parameter". Here all the brackets are written before the ellipsis.
+     */
+    @Test
+    void ellipsisCanHaveAnnotationsTooWithLegalNotation() {
+        Parameter p = parser.parseParameter("int[][]@X...a");
+
+        assertThat(p.getVarArgsAnnotations()).containsExactly(new MarkerAnnotationExpr(parser.parseName("X")));
         assertEquals("int[][]@X ... a", p.toString());
         assertEquals("int[][]@X... a", ConcreteSyntaxModel.genericPrettyPrint(p));
+    }
+
+    @Test
+    void arrayLevel() {
+        FieldDeclaration fd1 = parser.parseBodyDeclaration("int[] a;").asFieldDeclaration();
+        assertEquals(1, fd1.getVariable(0).getType().getArrayLevel());
+        FieldDeclaration fd2 = parser.parseBodyDeclaration("int[][] a;").asFieldDeclaration();
+        assertEquals(2, fd2.getVariable(0).getType().getArrayLevel());
+    }
+
+    @Test
+    void range() {
+        Type type = parser.parseType("Long[][]");
+        assertEquals(8, type.getRange().get().end.column);
     }
 }

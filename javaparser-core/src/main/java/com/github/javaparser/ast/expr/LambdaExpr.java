@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2007-2010 Júlio Vilmar Gesser.
- * Copyright (C) 2011, 2013-2021 The JavaParser Team.
+ * Copyright (C) 2011, 2013-2026 The JavaParser Team.
  *
  * This file is part of JavaParser.
  *
@@ -19,6 +19,8 @@
  * GNU Lesser General Public License for more details.
  */
 package com.github.javaparser.ast.expr;
+
+import static com.github.javaparser.utils.Utils.assertNotNull;
 
 import com.github.javaparser.TokenRange;
 import com.github.javaparser.ast.AllFieldsConstructor;
@@ -40,7 +42,6 @@ import com.github.javaparser.metamodel.JavaParserMetaModel;
 import com.github.javaparser.metamodel.LambdaExprMetaModel;
 import java.util.Optional;
 import java.util.function.Consumer;
-import static com.github.javaparser.utils.Utils.assertNotNull;
 
 /**
  * <h1>A lambda expression</h1>
@@ -107,7 +108,8 @@ public class LambdaExpr extends Expression implements NodeWithParameters<LambdaE
      * This constructor is used by the parser and is considered private.
      */
     @Generated("com.github.javaparser.generator.core.node.MainConstructorGenerator")
-    public LambdaExpr(TokenRange tokenRange, NodeList<Parameter> parameters, Statement body, boolean isEnclosingParameters) {
+    public LambdaExpr(
+            TokenRange tokenRange, NodeList<Parameter> parameters, Statement body, boolean isEnclosingParameters) {
         super(tokenRange);
         setParameters(parameters);
         setBody(body);
@@ -127,8 +129,7 @@ public class LambdaExpr extends Expression implements NodeWithParameters<LambdaE
             return this;
         }
         notifyPropertyChange(ObservableProperty.PARAMETERS, this.parameters, parameters);
-        if (this.parameters != null)
-            this.parameters.setParentNode(null);
+        if (this.parameters != null) this.parameters.setParentNode(null);
         this.parameters = parameters;
         setAsParentNodeOf(parameters);
         return this;
@@ -149,8 +150,7 @@ public class LambdaExpr extends Expression implements NodeWithParameters<LambdaE
             return this;
         }
         notifyPropertyChange(ObservableProperty.BODY, this.body, body);
-        if (this.body != null)
-            this.body.setParentNode(null);
+        if (this.body != null) this.body.setParentNode(null);
         this.body = body;
         setAsParentNodeOf(body);
         return this;
@@ -178,7 +178,8 @@ public class LambdaExpr extends Expression implements NodeWithParameters<LambdaE
         if (isEnclosingParameters == this.isEnclosingParameters) {
             return this;
         }
-        notifyPropertyChange(ObservableProperty.ENCLOSING_PARAMETERS, this.isEnclosingParameters, isEnclosingParameters);
+        notifyPropertyChange(
+                ObservableProperty.ENCLOSING_PARAMETERS, this.isEnclosingParameters, isEnclosingParameters);
         this.isEnclosingParameters = isEnclosingParameters;
         return this;
     }
@@ -186,8 +187,9 @@ public class LambdaExpr extends Expression implements NodeWithParameters<LambdaE
     @Override
     @Generated("com.github.javaparser.generator.core.node.RemoveMethodGenerator")
     public boolean remove(Node node) {
-        if (node == null)
+        if (node == null) {
             return false;
+        }
         for (int i = 0; i < parameters.size(); i++) {
             if (parameters.get(i) == node) {
                 parameters.remove(i);
@@ -205,9 +207,8 @@ public class LambdaExpr extends Expression implements NodeWithParameters<LambdaE
     public Optional<Expression> getExpressionBody() {
         if (body.isExpressionStmt()) {
             return Optional.of(body.asExpressionStmt().getExpression());
-        } else {
-            return Optional.empty();
         }
+        return Optional.empty();
     }
 
     @Override
@@ -225,8 +226,9 @@ public class LambdaExpr extends Expression implements NodeWithParameters<LambdaE
     @Override
     @Generated("com.github.javaparser.generator.core.node.ReplaceMethodGenerator")
     public boolean replace(Node node, Node replacementNode) {
-        if (node == null)
+        if (node == null) {
             return false;
+        }
         if (node == body) {
             setBody((Statement) replacementNode);
             return true;
@@ -270,5 +272,12 @@ public class LambdaExpr extends Expression implements NodeWithParameters<LambdaE
     @Override
     public boolean isPolyExpression() {
         return true;
+    }
+
+    /*
+     * Returns true if no type parameter has been defined
+     */
+    public boolean isExplicitlyTyped() {
+        return getParameters().stream().allMatch(p -> !(p.getType().isUnknownType()));
     }
 }

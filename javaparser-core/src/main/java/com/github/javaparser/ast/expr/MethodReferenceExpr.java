@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2007-2010 Júlio Vilmar Gesser.
- * Copyright (C) 2011, 2013-2021 The JavaParser Team.
+ * Copyright (C) 2011, 2013-2026 The JavaParser Team.
  *
  * This file is part of JavaParser.
  *
@@ -20,6 +20,9 @@
  */
 package com.github.javaparser.ast.expr;
 
+import static com.github.javaparser.utils.Utils.assertNonEmpty;
+import static com.github.javaparser.utils.Utils.assertNotNull;
+
 import com.github.javaparser.TokenRange;
 import com.github.javaparser.ast.AllFieldsConstructor;
 import com.github.javaparser.ast.Generated;
@@ -37,11 +40,11 @@ import com.github.javaparser.metamodel.MethodReferenceExprMetaModel;
 import com.github.javaparser.metamodel.NonEmptyProperty;
 import com.github.javaparser.metamodel.OptionalProperty;
 import com.github.javaparser.resolution.Resolvable;
+import com.github.javaparser.resolution.UnsolvedSymbolException;
+import com.github.javaparser.resolution.declarations.ResolvedConstructorDeclaration;
 import com.github.javaparser.resolution.declarations.ResolvedMethodDeclaration;
 import java.util.Optional;
 import java.util.function.Consumer;
-import static com.github.javaparser.utils.Utils.assertNonEmpty;
-import static com.github.javaparser.utils.Utils.assertNotNull;
 
 /**
  * Method reference expressions introduced in Java 8 specifically designed to simplify lambda Expressions.
@@ -54,7 +57,16 @@ import static com.github.javaparser.utils.Utils.assertNotNull;
  *
  * @author Raquel Pau
  */
-public class MethodReferenceExpr extends Expression implements NodeWithTypeArguments<MethodReferenceExpr>, NodeWithIdentifier<MethodReferenceExpr>, Resolvable<ResolvedMethodDeclaration> {
+public class MethodReferenceExpr extends Expression
+        implements NodeWithTypeArguments<MethodReferenceExpr>,
+                NodeWithIdentifier<MethodReferenceExpr>,
+                Resolvable<ResolvedMethodDeclaration> {
+
+    /**
+     * The identifier of a constructor reference, as opposed to the method name of an ordinary method
+     * reference (JLS §15.13).
+     */
+    public static final String CONSTRUCTOR_REFERENCE_IDENTIFIER = "new";
 
     private Expression scope;
 
@@ -77,7 +89,8 @@ public class MethodReferenceExpr extends Expression implements NodeWithTypeArgum
      * This constructor is used by the parser and is considered private.
      */
     @Generated("com.github.javaparser.generator.core.node.MainConstructorGenerator")
-    public MethodReferenceExpr(TokenRange tokenRange, Expression scope, NodeList<Type> typeArguments, String identifier) {
+    public MethodReferenceExpr(
+            TokenRange tokenRange, Expression scope, NodeList<Type> typeArguments, String identifier) {
         super(tokenRange);
         setScope(scope);
         setTypeArguments(typeArguments);
@@ -109,8 +122,7 @@ public class MethodReferenceExpr extends Expression implements NodeWithTypeArgum
             return this;
         }
         notifyPropertyChange(ObservableProperty.SCOPE, this.scope, scope);
-        if (this.scope != null)
-            this.scope.setParentNode(null);
+        if (this.scope != null) this.scope.setParentNode(null);
         this.scope = scope;
         setAsParentNodeOf(scope);
         return this;
@@ -133,8 +145,7 @@ public class MethodReferenceExpr extends Expression implements NodeWithTypeArgum
             return this;
         }
         notifyPropertyChange(ObservableProperty.TYPE_ARGUMENTS, this.typeArguments, typeArguments);
-        if (this.typeArguments != null)
-            this.typeArguments.setParentNode(null);
+        if (this.typeArguments != null) this.typeArguments.setParentNode(null);
         this.typeArguments = typeArguments;
         setAsParentNodeOf(typeArguments);
         return this;
@@ -148,7 +159,7 @@ public class MethodReferenceExpr extends Expression implements NodeWithTypeArgum
     @Generated("com.github.javaparser.generator.core.node.PropertyGenerator")
     public MethodReferenceExpr setIdentifier(final String identifier) {
         assertNonEmpty(identifier);
-        if (identifier == this.identifier) {
+        if (identifier.equals(this.identifier)) {
             return this;
         }
         notifyPropertyChange(ObservableProperty.IDENTIFIER, this.identifier, identifier);
@@ -159,8 +170,9 @@ public class MethodReferenceExpr extends Expression implements NodeWithTypeArgum
     @Override
     @Generated("com.github.javaparser.generator.core.node.RemoveMethodGenerator")
     public boolean remove(Node node) {
-        if (node == null)
+        if (node == null) {
             return false;
+        }
         if (typeArguments != null) {
             for (int i = 0; i < typeArguments.size(); i++) {
                 if (typeArguments.get(i) == node) {
@@ -187,8 +199,9 @@ public class MethodReferenceExpr extends Expression implements NodeWithTypeArgum
     @Override
     @Generated("com.github.javaparser.generator.core.node.ReplaceMethodGenerator")
     public boolean replace(Node node, Node replacementNode) {
-        if (node == null)
+        if (node == null) {
             return false;
+        }
         if (node == scope) {
             setScope((Expression) replacementNode);
             return true;
@@ -230,10 +243,46 @@ public class MethodReferenceExpr extends Expression implements NodeWithTypeArgum
 
     /**
      * @return the method declaration this method reference is referencing.
+     * @throws UnsolvedSymbolException if the method declaration cannot be found, or if this is a
+     *         constructor reference. A constructor reference denotes a
+     *         {@link ResolvedConstructorDeclaration}, which is not a
+     *         {@link ResolvedMethodDeclaration}; use {@link #resolveInvokedConstructor()} instead.
+     * @see #isConstructorReference()
+     * @see #resolveInvokedConstructor()
      */
     @Override
     public ResolvedMethodDeclaration resolve() {
         return getSymbolResolver().resolveDeclaration(this, ResolvedMethodDeclaration.class);
+    }
+
+    /**
+     * Resolves the constructor this constructor reference is referencing.
+     * <p>
+     * The constructor is selected from the constructors of the scope type using the parameter types
+     * of the functional interface method the reference is assigned to, so that
+     * {@code Supplier<Foo> s = Foo::new} and {@code Function<String, Foo> f = Foo::new} resolve to
+     * {@code Foo()} and {@code Foo(String)} respectively.
+     * <p>
+     * Array constructor references such as {@code String[]::new} cannot be resolved: JLS §15.13.1
+     * defines them as array creation, for which there is no constructor declaration.
+     *
+     * @return the constructor declaration this constructor reference is referencing.
+     * @throws UnsolvedSymbolException if the constructor declaration cannot be found, or if this is
+     *         an ordinary method reference rather than a constructor reference.
+     * @see #isConstructorReference()
+     */
+    public ResolvedConstructorDeclaration resolveInvokedConstructor() {
+        return getSymbolResolver().resolveDeclaration(this, ResolvedConstructorDeclaration.class);
+    }
+
+    /**
+     * A constructor reference is a method reference whose identifier is the keyword {@code new},
+     * such as {@code Foo::new} or {@code String[]::new} (JLS §15.13).
+     *
+     * @return whether this method reference references a constructor rather than a method.
+     */
+    public boolean isConstructorReference() {
+        return CONSTRUCTOR_REFERENCE_IDENTIFIER.equals(getIdentifier());
     }
 
     /*
@@ -243,5 +292,23 @@ public class MethodReferenceExpr extends Expression implements NodeWithTypeArgum
     @Override
     public boolean isPolyExpression() {
         return true;
+    }
+
+    /*
+     * https://docs.oracle.com/javase/specs/jls/se8/html/jls-15.html#jls-15.13
+     * Workaround to handle cases where scope should have been parsed as a primary expression.
+     * A change to the grammar should lead to the removal of this method.
+     * This is the case, for example, in the following reference expression ‘foo:convert’,
+     * where foo is an instance of the Foo class and convert is a method of the Foo class.
+     * foo should not be considered a type expression as String could be in the expression String::length.
+     * This method compares the scope (e.g. foo) with the resolved type, e.g. Foo.
+     * If they are different, we consider it to be a primary expression.
+     */
+    public boolean isScopePrimaryExpr() {
+        return !getScope()
+                .calculateResolvedType()
+                .erasure()
+                .describe()
+                .endsWith(getScope().toString());
     }
 }

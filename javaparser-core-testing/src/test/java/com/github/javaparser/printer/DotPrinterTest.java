@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2007-2010 Júlio Vilmar Gesser.
- * Copyright (C) 2011, 2013-2019 The JavaParser Team.
+ * Copyright (C) 2011, 2013-2026 The JavaParser Team.
  *
  * This file is part of JavaParser.
  *
@@ -21,16 +21,19 @@
 
 package com.github.javaparser.printer;
 
+import static com.github.javaparser.utils.TestUtils.assertEqualsStringIgnoringEol;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
+import com.github.javaparser.JavaParserAdapter;
+import com.github.javaparser.StaticJavaParser;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.expr.Expression;
 import org.junit.jupiter.api.Test;
 
-import static com.github.javaparser.StaticJavaParser.parse;
-import static com.github.javaparser.StaticJavaParser.parseExpression;
-import static com.github.javaparser.utils.TestUtils.assertEqualsStringIgnoringEol;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-
 class DotPrinterTest {
+
+    private final JavaParserAdapter parser = StaticJavaParser.newParserAdapter();
+
     @Test
     void testWithType() {
         String expectedOutput = "digraph {" + System.lineSeparator();
@@ -52,7 +55,7 @@ class DotPrinterTest {
         expectedOutput += "}";
 
         DotPrinter dotPrinter = new DotPrinter(true);
-        Expression expression = parseExpression("x(1,1)");
+        Expression expression = parser.parseExpression("x(1,1)");
         String output = dotPrinter.output(expression);
         assertEquals(expectedOutput, output);
     }
@@ -74,7 +77,7 @@ class DotPrinterTest {
         expectedOutput += "}";
 
         DotPrinter dotPrinter = new DotPrinter(false);
-        Expression expression = parseExpression("1+1");
+        Expression expression = parser.parseExpression("1+1");
         String output = dotPrinter.output(expression);
         assertEquals(expectedOutput, output);
     }
@@ -82,24 +85,27 @@ class DotPrinterTest {
     @Test
     void testIssue1871() {
         DotPrinter printer = new DotPrinter(false);
-        CompilationUnit cu = parse("//q\"q\nclass X{}");
+        CompilationUnit cu = parser.parse("//q\"q\nclass X{}");
         String output = printer.output(cu);
-        assertEqualsStringIgnoringEol("digraph {\n" +
-                "n0 [label=\"root\"];\n" +
-                "n1 [label=\"types\"];\n" +
-                "n0 -> n1;\n" +
-                "n2 [label=\"type\"];\n" +
-                "n1 -> n2;\n" +
-                "n3 [label=\"isInterface='false'\"];\n" +
-                "n2 -> n3;\n" +
-                "n4 [label=\"name\"];\n" +
-                "n2 -> n4;\n" +
-                "n5 [label=\"identifier='X'\"];\n" +
-                "n4 -> n5;\n" +
-                "n6 [label=\"comment\"];\n" +
-                "n2 -> n6;\n" +
-                "n7 [label=\"content='q\\\"q'\"];\n" +
-                "n6 -> n7;\n" +
-                "}", output);
+        assertEqualsStringIgnoringEol(
+                "digraph {\n" + "n0 [label=\"root\"];\n"
+                        + "n1 [label=\"types\"];\n"
+                        + "n0 -> n1;\n"
+                        + "n2 [label=\"type\"];\n"
+                        + "n1 -> n2;\n"
+                        + "n3 [label=\"isCompact='false'\"];\n"
+                        + "n2 -> n3;\n"
+                        + "n4 [label=\"isInterface='false'\"];\n"
+                        + "n2 -> n4;\n"
+                        + "n5 [label=\"name\"];\n"
+                        + "n2 -> n5;\n"
+                        + "n6 [label=\"identifier='X'\"];\n"
+                        + "n5 -> n6;\n"
+                        + "n7 [label=\"comment\"];\n"
+                        + "n2 -> n7;\n"
+                        + "n8 [label=\"content='q\\\"q'\"];\n"
+                        + "n7 -> n8;\n"
+                        + "}",
+                output);
     }
 }

@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2007-2010 Júlio Vilmar Gesser.
- * Copyright (C) 2011, 2013-2021 The JavaParser Team.
+ * Copyright (C) 2011, 2013-2026 The JavaParser Team.
  *
  * This file is part of JavaParser.
  *
@@ -20,10 +20,11 @@
  */
 package com.github.javaparser.ast.expr;
 
+import static com.github.javaparser.utils.Utils.hasUnaryMinusAsParent;
+
 import com.github.javaparser.TokenRange;
 import com.github.javaparser.ast.AllFieldsConstructor;
 import com.github.javaparser.ast.Generated;
-import com.github.javaparser.ast.Node;
 import com.github.javaparser.ast.visitor.CloneVisitor;
 import com.github.javaparser.ast.visitor.GenericVisitor;
 import com.github.javaparser.ast.visitor.VoidVisitor;
@@ -32,7 +33,6 @@ import com.github.javaparser.metamodel.JavaParserMetaModel;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.function.Consumer;
-import static com.github.javaparser.utils.Utils.hasUnaryMinusAsParent;
 
 /**
  * All ways to specify an int literal.
@@ -91,14 +91,6 @@ public class IntegerLiteralExpr extends LiteralStringValueExpr {
         v.visit(this, arg);
     }
 
-    @Override
-    @Generated("com.github.javaparser.generator.core.node.RemoveMethodGenerator")
-    public boolean remove(Node node) {
-        if (node == null)
-            return false;
-        return super.remove(node);
-    }
-
     /**
      * @return the literal value as an integer while respecting different number representations
      * @deprecated This function has issues with corner cases, such as 2147483648, so please use {@link
@@ -135,17 +127,10 @@ public class IntegerLiteralExpr extends LiteralStringValueExpr {
      * @return the literal value as a number while respecting different number representations
      */
     public Number asNumber() {
-        /*
-         * we need to handle the special case for the literal 2147483648, which is used to
-         * represent Integer.MIN_VALUE (-2147483648) as a combination of a UnaryExpr and an
-         * IntegerLiteralExpr. However 2147483648 cannot be represented in an integer, so we
-         * need to return a long
-         */
         if (Objects.equals(value, MAX_31_BIT_UNSIGNED_VALUE_AS_STRING) && hasUnaryMinusAsParent(this)) {
             return MAX_31_BIT_UNSIGNED_VALUE_AS_LONG;
-        } else {
-            return asInt();
         }
+        return asInt();
     }
 
     /**
@@ -154,7 +139,7 @@ public class IntegerLiteralExpr extends LiteralStringValueExpr {
      */
     @Deprecated
     public IntegerLiteralExpr setInt(int value) {
-        this.value = String.valueOf(value);
+        setValue(String.valueOf(value));
         return this;
     }
 
@@ -168,14 +153,6 @@ public class IntegerLiteralExpr extends LiteralStringValueExpr {
     @Generated("com.github.javaparser.generator.core.node.GetMetaModelGenerator")
     public IntegerLiteralExprMetaModel getMetaModel() {
         return JavaParserMetaModel.integerLiteralExprMetaModel;
-    }
-
-    @Override
-    @Generated("com.github.javaparser.generator.core.node.ReplaceMethodGenerator")
-    public boolean replace(Node node, Node replacementNode) {
-        if (node == null)
-            return false;
-        return super.replace(node, replacementNode);
     }
 
     @Override

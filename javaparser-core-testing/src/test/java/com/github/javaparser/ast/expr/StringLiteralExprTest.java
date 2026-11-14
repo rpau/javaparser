@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2007-2010 Júlio Vilmar Gesser.
- * Copyright (C) 2011, 2013-2019 The JavaParser Team.
+ * Copyright (C) 2011, 2013-2026 The JavaParser Team.
  *
  * This file is part of JavaParser.
  *
@@ -21,15 +21,32 @@
 
 package com.github.javaparser.ast.expr;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
+import com.github.javaparser.JavaParserAdapter;
+import com.github.javaparser.StaticJavaParser;
 import org.junit.jupiter.api.Test;
 
-import static com.github.javaparser.StaticJavaParser.parseExpression;
-import static org.junit.jupiter.api.Assertions.*;
-
 class StringLiteralExprTest {
+
+    private final JavaParserAdapter parser = StaticJavaParser.newParserAdapter();
+
     @Test
     void unicodeEscapesArePreservedInStrings() {
-        StringLiteralExpr omega = parseExpression("\"xxx\\u03a9xxx\"");
+        StringLiteralExpr omega = parser.parseExpression("\"xxx\\u03a9xxx\"");
         assertEquals("xxx\\u03a9xxx", omega.getValue());
+    }
+
+    @Test
+    void spaceEscapeIsTranslated() {
+        // JLS 3.10.7: \s is an escape sequence for a space in string literals, not only in text blocks
+        StringLiteralExpr s = parser.parseExpression("\"a\\sb\\s\"");
+        assertEquals("a b ", s.asString());
+    }
+
+    @Test
+    void escapedBackslashBeforeSIsNotASpaceEscape() {
+        StringLiteralExpr s = parser.parseExpression("\"a\\\\sb\"");
+        assertEquals("a\\sb", s.asString());
     }
 }

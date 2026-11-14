@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2007-2010 Júlio Vilmar Gesser.
- * Copyright (C) 2011, 2013-2021 The JavaParser Team.
+ * Copyright (C) 2011, 2013-2026 The JavaParser Team.
  *
  * This file is part of JavaParser.
  *
@@ -18,16 +18,15 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU Lesser General Public License for more details.
  */
-
 package com.github.javaparser.javadoc;
 
 import com.github.javaparser.ast.comments.JavadocComment;
+import com.github.javaparser.ast.comments.MarkdownComment;
+import com.github.javaparser.ast.comments.TraditionalJavadocComment;
 import com.github.javaparser.javadoc.description.JavadocDescription;
-
+import com.github.javaparser.utils.LineSeparator;
 import java.util.LinkedList;
 import java.util.List;
-
-import static com.github.javaparser.utils.Utils.*;
 
 /**
  * The structured content of a single Javadoc comment.
@@ -40,11 +39,19 @@ import static com.github.javaparser.utils.Utils.*;
 public class Javadoc {
 
     private JavadocDescription description;
+
     private List<JavadocBlockTag> blockTags;
+
+    private boolean isMarkdownComment;
 
     public Javadoc(JavadocDescription description) {
         this.description = description;
         this.blockTags = new LinkedList<>();
+    }
+
+    public Javadoc(JavadocDescription description, boolean isMarkdownComment) {
+        this(description);
+        this.isMarkdownComment = isMarkdownComment;
     }
 
     public Javadoc addBlockTag(JavadocBlockTag blockTag) {
@@ -83,14 +90,14 @@ public class Javadoc {
         StringBuilder sb = new StringBuilder();
         if (!description.isEmpty()) {
             sb.append(description.toText());
-            sb.append(SYSTEM_EOL);
+            sb.append(LineSeparator.SYSTEM);
         }
         if (!blockTags.isEmpty()) {
-            sb.append(SYSTEM_EOL);
+            sb.append(LineSeparator.SYSTEM);
         }
         blockTags.forEach(bt -> {
             sb.append(bt.toText());
-            sb.append(SYSTEM_EOL);
+            sb.append(LineSeparator.SYSTEM);
         });
         return sb.toString();
     }
@@ -108,23 +115,29 @@ public class Javadoc {
     public JavadocComment toComment(String indentation) {
         for (char c : indentation.toCharArray()) {
             if (!Character.isWhitespace(c)) {
-                throw new IllegalArgumentException("The indentation string should be composed only by whitespace characters");
+                throw new IllegalArgumentException(
+                        "The indentation string should be composed only by whitespace characters");
             }
         }
         StringBuilder sb = new StringBuilder();
-        sb.append(SYSTEM_EOL);
+        sb.append(LineSeparator.SYSTEM);
         final String text = toText();
+        String commentPrefix = isMarkdownComment ? "/// " : " * ";
         if (!text.isEmpty()) {
-            for (String line : text.split(SYSTEM_EOL)) {
+            for (String line : text.split(LineSeparator.SYSTEM.asRawString())) {
                 sb.append(indentation);
-                sb.append(" * ");
+                sb.append(commentPrefix);
                 sb.append(line);
-                sb.append(SYSTEM_EOL);
+                sb.append(LineSeparator.SYSTEM);
             }
         }
-        sb.append(indentation);
-        sb.append(" ");
-        return new JavadocComment(sb.toString());
+        if (isMarkdownComment) {
+            return new MarkdownComment(sb.toString());
+        } else {
+            sb.append(indentation);
+            sb.append(" ");
+            return new TraditionalJavadocComment(sb.toString());
+        }
     }
 
     public JavadocDescription getDescription() {
@@ -142,11 +155,8 @@ public class Javadoc {
     public boolean equals(Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
-
         Javadoc document = (Javadoc) o;
-
         return description.equals(document.description) && blockTags.equals(document.blockTags);
-
     }
 
     @Override
@@ -158,10 +168,6 @@ public class Javadoc {
 
     @Override
     public String toString() {
-        return "Javadoc{" +
-                "description=" + description +
-                ", blockTags=" + blockTags +
-                '}';
+        return "Javadoc{" + "description=" + description + ", blockTags=" + blockTags + '}';
     }
-
 }

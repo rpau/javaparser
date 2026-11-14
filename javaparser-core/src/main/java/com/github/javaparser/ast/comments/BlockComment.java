@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2007-2010 Júlio Vilmar Gesser.
- * Copyright (C) 2011, 2013-2021 The JavaParser Team.
+ * Copyright (C) 2011, 2013-2026 The JavaParser Team.
  *
  * This file is part of JavaParser.
  *
@@ -23,7 +23,6 @@ package com.github.javaparser.ast.comments;
 import com.github.javaparser.TokenRange;
 import com.github.javaparser.ast.AllFieldsConstructor;
 import com.github.javaparser.ast.Generated;
-import com.github.javaparser.ast.Node;
 import com.github.javaparser.ast.visitor.CloneVisitor;
 import com.github.javaparser.ast.visitor.GenericVisitor;
 import com.github.javaparser.ast.visitor.VoidVisitor;
@@ -36,7 +35,7 @@ import java.util.function.Consumer;
  * <p>
  * AST node that represent block comments.
  * </p>
- * Block comments can has multi lines and are delimited by "/&#42;" and
+ * Block comments can have multi lines and are delimited by "/&#42;" and
  * "&#42;/".
  *
  * @author Julio Vilmar Gesser
@@ -74,14 +73,6 @@ public class BlockComment extends Comment {
     }
 
     @Override
-    @Generated("com.github.javaparser.generator.core.node.RemoveMethodGenerator")
-    public boolean remove(Node node) {
-        if (node == null)
-            return false;
-        return super.remove(node);
-    }
-
-    @Override
     @Generated("com.github.javaparser.generator.core.node.CloneGenerator")
     public BlockComment clone() {
         return (BlockComment) accept(new CloneVisitor(), null);
@@ -91,14 +82,6 @@ public class BlockComment extends Comment {
     @Generated("com.github.javaparser.generator.core.node.GetMetaModelGenerator")
     public BlockCommentMetaModel getMetaModel() {
         return JavaParserMetaModel.blockCommentMetaModel;
-    }
-
-    @Override
-    @Generated("com.github.javaparser.generator.core.node.ReplaceMethodGenerator")
-    public boolean replace(Node node, Node replacementNode) {
-        if (node == null)
-            return false;
-        return super.replace(node, replacementNode);
     }
 
     @Override
@@ -123,5 +106,15 @@ public class BlockComment extends Comment {
     @Generated("com.github.javaparser.generator.core.node.TypeCastingGenerator")
     public Optional<BlockComment> toBlockComment() {
         return Optional.of(this);
+    }
+
+    @Override
+    public String getHeader() {
+        return "/*";
+    }
+
+    @Override
+    public String getFooter() {
+        return "*/";
     }
 }

@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2007-2010 Júlio Vilmar Gesser.
- * Copyright (C) 2011, 2013-2019 The JavaParser Team.
+ * Copyright (C) 2011, 2013-2026 The JavaParser Team.
  *
  * This file is part of JavaParser.
  *
@@ -21,19 +21,19 @@
 
 package com.github.javaparser.javadoc;
 
+import com.github.javaparser.JavaParserAdapter;
 import com.github.javaparser.ParseProblemException;
+import com.github.javaparser.StaticJavaParser;
 import com.github.javaparser.ast.CompilationUnit;
-import com.github.javaparser.ast.comments.JavadocComment;
+import com.github.javaparser.ast.comments.TraditionalJavadocComment;
 import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
-import org.junit.jupiter.api.Test;
-
 import java.io.File;
 import java.io.FileNotFoundException;
-import java.nio.charset.StandardCharsets;
-
-import static com.github.javaparser.StaticJavaParser.parse;
+import org.junit.jupiter.api.Test;
 
 class JavadocExtractorTest {
+
+    private final JavaParserAdapter parser = StaticJavaParser.newParserAdapter();
 
     @Test
     void canParseAllJavadocsInJavaParser() throws FileNotFoundException {
@@ -42,16 +42,16 @@ class JavadocExtractorTest {
 
     private void processFile(File file) throws FileNotFoundException {
         try {
-            CompilationUnit cu = parse(file);
+            CompilationUnit cu = parser.parse(file);
             new VoidVisitorAdapter<Object>() {
                 @Override
-                public void visit(JavadocComment n, Object arg) {
+                public void visit(TraditionalJavadocComment n, Object arg) {
                     super.visit(n, arg);
                     n.parse();
                 }
             }.visit(cu, null);
         } catch (ParseProblemException e) {
-            System.err.println("ERROR PROCESSING "+ file);
+            System.err.println("ERROR PROCESSING " + file);
         }
     }
 

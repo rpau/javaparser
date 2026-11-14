@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2007-2010 Júlio Vilmar Gesser.
- * Copyright (C) 2011, 2013-2019 The JavaParser Team.
+ * Copyright (C) 2011, 2013-2026 The JavaParser Team.
  *
  * This file is part of JavaParser.
  *
@@ -21,17 +21,24 @@
 
 package com.github.javaparser.ast.expr;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+
+import com.github.javaparser.JavaParserAdapter;
+import com.github.javaparser.ParserConfiguration;
 import com.github.javaparser.StaticJavaParser;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-
 class BinaryExprTest {
+
+    private final JavaParserAdapter parser = StaticJavaParser.newParserAdapter();
 
     @Test
     void convertOperator() {
-        assertEquals(AssignExpr.Operator.PLUS, BinaryExpr.Operator.PLUS.toAssignOperator().get());
+        assertEquals(
+                AssignExpr.Operator.PLUS,
+                BinaryExpr.Operator.PLUS.toAssignOperator().get());
     }
 
     /**
@@ -52,7 +59,7 @@ class BinaryExprTest {
 
         @Test
         public void logicalAndOr() {
-            Expression expression = StaticJavaParser.parseExpression("true || false && false || false");
+            Expression expression = parser.parseExpression("true || false && false || false");
             Expression bracketedExpression = applyBrackets(expression);
 
             String expected = "(true || (false && false)) || false";
@@ -63,7 +70,7 @@ class BinaryExprTest {
 
         @Test
         public void logicalOrEvaluationLeftToRight() {
-            Expression expression = StaticJavaParser.parseExpression("false || true || false || true || false || true");
+            Expression expression = parser.parseExpression("false || true || false || true || false || true");
             Expression bracketedExpression = applyBrackets(expression);
 
             String expected = "((((false || true) || false) || true) || false) || true";
@@ -74,7 +81,7 @@ class BinaryExprTest {
 
         @Test
         public void logicalAndEvaluationLeftToRight() {
-            Expression expression = StaticJavaParser.parseExpression("false && true && false && true && false && true");
+            Expression expression = parser.parseExpression("false && true && false && true && false && true");
             Expression bracketedExpression = applyBrackets(expression);
 
             String expected = "((((false && true) && false) && true) && false) && true";
@@ -85,7 +92,7 @@ class BinaryExprTest {
 
         @Test
         public void andTakesPrecedenceOverOr() {
-            Expression expression = StaticJavaParser.parseExpression("true || false && false");
+            Expression expression = parser.parseExpression("true || false && false");
             Expression bracketedExpression = applyBrackets(expression);
 
             String expected = "true || (false && false)";
@@ -96,7 +103,7 @@ class BinaryExprTest {
 
         @Test
         public void andTakesPrecedenceOverOrThenLeftToRight() {
-            Expression expression = StaticJavaParser.parseExpression("true || false && false || true");
+            Expression expression = parser.parseExpression("true || false && false || true");
             Expression bracketedExpression = applyBrackets(expression);
 
             String expected = "(true || (false && false)) || true";
@@ -105,10 +112,9 @@ class BinaryExprTest {
             assertEquals(expected, actual);
         }
 
-
         @Test
         public void example() {
-            Expression expression = StaticJavaParser.parseExpression("year % 4 == 0 && year % 100 != 0 || year % 400 == 0");
+            Expression expression = parser.parseExpression("year % 4 == 0 && year % 100 != 0 || year % 400 == 0");
             Expression bracketedExpression = applyBrackets(expression);
 
             String expected = "((year % 4 == 0) && (year % 100 != 0)) || (year % 400 == 0)";
@@ -116,24 +122,63 @@ class BinaryExprTest {
 
             assertEquals(expected, actual);
         }
-
-
     }
 
-
     private Expression applyBrackets(Expression expression) {
-        expression.findAll(BinaryExpr.class)
-                .stream()
-                .filter(binaryExpr -> binaryExpr.getOperator() == BinaryExpr.Operator.AND || binaryExpr.getOperator() == BinaryExpr.Operator.OR)
+        expression.findAll(BinaryExpr.class).stream()
+                .filter(binaryExpr -> binaryExpr.getOperator() == BinaryExpr.Operator.AND
+                        || binaryExpr.getOperator() == BinaryExpr.Operator.OR)
                 .forEach(binaryExpr -> {
-                    if(!binaryExpr.getLeft().isBooleanLiteralExpr()) {
+                    if (!binaryExpr.getLeft().isBooleanLiteralExpr()) {
                         binaryExpr.setLeft(new EnclosedExpr(binaryExpr.getLeft()));
                     }
-                    if(!binaryExpr.getRight().isBooleanLiteralExpr()) {
+                    if (!binaryExpr.getRight().isBooleanLiteralExpr()) {
                         binaryExpr.setRight(new EnclosedExpr(binaryExpr.getRight()));
                     }
                 });
 
         return expression;
+    }
+
+    @Test
+    void binaryExprWithAssertAsLeftOperandTest() {
+        // Note: "assert" as an identifier is only valid in Java < 1.4
+        // In modern Java, "assert" is a keyword. However, "assert" as an identifier is still supported
+        // for backward compatibility.
+        JavaParserAdapter parser = StaticJavaParser.newParserAdapter(
+                new ParserConfiguration().setLanguageLevel(ParserConfiguration.LanguageLevel.JAVA_1_0));
+
+        Expression e = parser.parseExpression("assert + 42");
+        assertInstanceOf(BinaryExpr.class, e);
+        BinaryExpr binary = e.asBinaryExpr();
+        assertEquals(BinaryExpr.Operator.PLUS, binary.getOperator());
+
+        // Check left operand is "assert" (as identifier)
+        assertInstanceOf(NameExpr.class, binary.getLeft());
+        assertEquals("assert", binary.getLeft().asNameExpr().getNameAsString());
+
+        assertInstanceOf(IntegerLiteralExpr.class, binary.getRight());
+        assertEquals("42", binary.getRight().asIntegerLiteralExpr().getValue());
+    }
+
+    @Test
+    void binaryExprWithAssertAsRightOperandTest() {
+        // Note: "assert" as an identifier is only valid in Java < 1.4
+        // In modern Java, "assert" is a keyword. However, "assert" as an identifier is still supported
+        // for backward compatibility.
+        JavaParserAdapter parser = StaticJavaParser.newParserAdapter(
+                new ParserConfiguration().setLanguageLevel(ParserConfiguration.LanguageLevel.JAVA_1_0));
+
+        Expression e = parser.parseExpression("x + assert");
+        assertInstanceOf(BinaryExpr.class, e);
+        BinaryExpr binary = e.asBinaryExpr();
+        assertEquals(BinaryExpr.Operator.PLUS, binary.getOperator());
+
+        assertInstanceOf(NameExpr.class, binary.getLeft());
+        assertEquals("x", binary.getLeft().asNameExpr().getNameAsString());
+
+        // Check right operand is "assert" (as identifier)
+        assertInstanceOf(NameExpr.class, binary.getRight());
+        assertEquals("assert", binary.getRight().asNameExpr().getNameAsString());
     }
 }

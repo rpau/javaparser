@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2007-2010 Júlio Vilmar Gesser.
- * Copyright (C) 2011, 2013-2021 The JavaParser Team.
+ * Copyright (C) 2011, 2013-2026 The JavaParser Team.
  *
  * This file is part of JavaParser.
  *
@@ -100,8 +100,7 @@ public class ContinueStmt extends Statement implements NodeWithOptionalLabel<Con
             return this;
         }
         notifyPropertyChange(ObservableProperty.LABEL, this.label, label);
-        if (this.label != null)
-            this.label.setParentNode(null);
+        if (this.label != null) this.label.setParentNode(null);
         this.label = label;
         setAsParentNodeOf(label);
         return this;
@@ -110,8 +109,9 @@ public class ContinueStmt extends Statement implements NodeWithOptionalLabel<Con
     @Override
     @Generated("com.github.javaparser.generator.core.node.RemoveMethodGenerator")
     public boolean remove(Node node) {
-        if (node == null)
+        if (node == null) {
             return false;
+        }
         if (label != null) {
             if (node == label) {
                 removeLabel();
@@ -141,8 +141,9 @@ public class ContinueStmt extends Statement implements NodeWithOptionalLabel<Con
     @Override
     @Generated("com.github.javaparser.generator.core.node.ReplaceMethodGenerator")
     public boolean replace(Node node, Node replacementNode) {
-        if (node == null)
+        if (node == null) {
             return false;
+        }
         if (label != null) {
             if (node == label) {
                 setLabel((SimpleName) replacementNode);

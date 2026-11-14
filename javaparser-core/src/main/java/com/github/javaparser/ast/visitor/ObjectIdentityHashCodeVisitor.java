@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2007-2010 Júlio Vilmar Gesser.
- * Copyright (C) 2011, 2013-2021 The JavaParser Team.
+ * Copyright (C) 2011, 2013-2026 The JavaParser Team.
  *
  * This file is part of JavaParser.
  *
@@ -23,8 +23,9 @@ package com.github.javaparser.ast.visitor;
 import com.github.javaparser.ast.*;
 import com.github.javaparser.ast.body.*;
 import com.github.javaparser.ast.comments.BlockComment;
-import com.github.javaparser.ast.comments.JavadocComment;
 import com.github.javaparser.ast.comments.LineComment;
+import com.github.javaparser.ast.comments.MarkdownComment;
+import com.github.javaparser.ast.comments.TraditionalJavadocComment;
 import com.github.javaparser.ast.expr.*;
 import com.github.javaparser.ast.modules.*;
 import com.github.javaparser.ast.stmt.*;
@@ -210,7 +211,7 @@ public class ObjectIdentityHashCodeVisitor implements GenericVisitor<Integer, Vo
         return n.hashCode();
     }
 
-    public Integer visit(final JavadocComment n, final Void arg) {
+    public Integer visit(final TraditionalJavadocComment n, final Void arg) {
         return n.hashCode();
     }
 
@@ -231,6 +232,10 @@ public class ObjectIdentityHashCodeVisitor implements GenericVisitor<Integer, Vo
     }
 
     public Integer visit(final LocalRecordDeclarationStmt n, final Void arg) {
+        return n.hashCode();
+    }
+
+    public Integer visit(final LocalEnumDeclarationStmt n, final Void arg) {
         return n.hashCode();
     }
 
@@ -442,7 +447,7 @@ public class ObjectIdentityHashCodeVisitor implements GenericVisitor<Integer, Vo
     }
 
     @Override
-    public Integer visit(final PatternExpr n, final Void arg) {
+    public Integer visit(final TypePatternExpr n, final Void arg) {
         return n.hashCode();
     }
 
@@ -452,6 +457,21 @@ public class ObjectIdentityHashCodeVisitor implements GenericVisitor<Integer, Vo
     }
 
     public Integer visit(final CompactConstructorDeclaration n, final Void arg) {
+        return n.hashCode();
+    }
+
+    @Override
+    public Integer visit(final RecordPatternExpr n, final Void arg) {
+        return n.hashCode();
+    }
+
+    @Override
+    public Integer visit(final MatchAllPatternExpr n, final Void arg) {
+        return n.hashCode();
+    }
+
+    @Override
+    public Integer visit(final MarkdownComment n, final Void arg) {
         return n.hashCode();
     }
 }

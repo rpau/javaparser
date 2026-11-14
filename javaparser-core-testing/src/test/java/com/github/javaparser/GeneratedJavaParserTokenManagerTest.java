@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2007-2010 Júlio Vilmar Gesser.
- * Copyright (C) 2011, 2013-2019 The JavaParser Team.
+ * Copyright (C) 2011, 2013-2026 The JavaParser Team.
  *
  * This file is part of JavaParser.
  *
@@ -21,19 +21,18 @@
 
 package com.github.javaparser;
 
+import java.io.IOException;
 import org.junit.jupiter.api.Test;
 
-import java.io.IOException;
-
-import static com.github.javaparser.StaticJavaParser.parseResource;
-
 class GeneratedJavaParserTokenManagerTest {
+    private final JavaParserAdapter parser = StaticJavaParser.newParserAdapter();
+
     private String makeFilename(String sampleName) {
         return "com/github/javaparser/issue_samples/" + sampleName + ".java.txt";
     }
 
     @Test
     void issue1003() throws IOException {
-        parseResource(makeFilename("issue1003"));
+        parser.parseResource(makeFilename("issue1003"));
     }
 }

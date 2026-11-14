@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2007-2010 Júlio Vilmar Gesser.
- * Copyright (C) 2011, 2013-2019 The JavaParser Team.
+ * Copyright (C) 2011, 2013-2026 The JavaParser Team.
  *
  * This file is part of JavaParser.
  *
@@ -21,17 +21,21 @@
 
 package com.github.javaparser.ast.stmt;
 
-import org.junit.jupiter.api.Test;
-
-import static com.github.javaparser.StaticJavaParser.parseStatement;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.github.javaparser.JavaParserAdapter;
+import com.github.javaparser.StaticJavaParser;
+import org.junit.jupiter.api.Test;
+
 class IfElseStmtTest {
+
+    private final JavaParserAdapter parser = StaticJavaParser.newParserAdapter();
 
     @Test
     void issue1247withElseSingleStmt() {
-        IfStmt ifStmt = parseStatement("if (cond) doSomething(); else doSomethingElse();").asIfStmt();
+        IfStmt ifStmt = parser.parseStatement("if (cond) doSomething(); else doSomethingElse();")
+                .asIfStmt();
         assertFalse(ifStmt.hasElseBlock());
         assertTrue(ifStmt.hasElseBranch());
         assertFalse(ifStmt.hasCascadingIfStmt());
@@ -39,7 +43,8 @@ class IfElseStmtTest {
 
     @Test
     void issue1247withElseBlockStmt() {
-        IfStmt ifStmt = parseStatement("if (cond) doSomething(); else { doSomethingElse(); }").asIfStmt();
+        IfStmt ifStmt = parser.parseStatement("if (cond) doSomething(); else { doSomethingElse(); }")
+                .asIfStmt();
         assertTrue(ifStmt.hasElseBlock());
         assertTrue(ifStmt.hasElseBranch());
         assertFalse(ifStmt.hasCascadingIfStmt());
@@ -47,10 +52,10 @@ class IfElseStmtTest {
 
     @Test
     void issue1247withElseSingleStmtWhichIsAnIf() {
-        IfStmt ifStmt = parseStatement("if (cond1) doSomething(); else if (cond2) doSomethingElse();").asIfStmt();
+        IfStmt ifStmt = parser.parseStatement("if (cond1) doSomething(); else if (cond2) doSomethingElse();")
+                .asIfStmt();
         assertFalse(ifStmt.hasElseBlock());
         assertTrue(ifStmt.hasElseBranch());
         assertTrue(ifStmt.hasCascadingIfStmt());
     }
-
 }

@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2007-2010 Júlio Vilmar Gesser.
- * Copyright (C) 2011, 2013-2021 The JavaParser Team.
+ * Copyright (C) 2011, 2013-2026 The JavaParser Team.
  *
  * This file is part of JavaParser.
  *
@@ -18,25 +18,36 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU Lesser General Public License for more details.
  */
-
 package com.github.javaparser;
 
-import com.github.javaparser.ast.Node;
 import com.github.javaparser.ast.comments.CommentsCollection;
-
+import com.github.javaparser.utils.LineSeparator;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.Optional;
 import java.util.function.Consumer;
-
-import static com.github.javaparser.utils.Utils.SYSTEM_EOL;
 
 /**
  * The results given when parsing with an instance of JavaParser.
  */
 public class ParseResult<T> {
+
     private final T result;
+
     private final List<Problem> problems;
+
     private final CommentsCollection commentsCollection;
+
+    /**
+     * Optional source path associated with this parse operation. This may be set by higher-level utilities
+     * (e.g., {@code SourceRoot}) to allow callers to correlate parse problems with the originating file path
+     * even when no {@code CompilationUnit} is produced.
+     * <p>
+     * Contract:
+     * - If present, it's expected to be an absolute {@link Path} to the source input used for this parse.
+     * - This value should be set immediately after parsing is performed and treated as effectively immutable thereafter.
+     */
+    private Path sourcePath;
 
     /**
      * General constructor.
@@ -67,6 +78,19 @@ public class ParseResult<T> {
     }
 
     /**
+     * Associates a source path with this parse result. Returns {@code this} for chaining.
+     * <p>
+     * Notes:
+     * - Intended for use by infrastructure (e.g., {@code SourceRoot}) to publish the originating file path.
+     * - Should be called immediately after parsing and not modified afterwards to avoid surprises in concurrent contexts.
+     * - The provided path is expected to be absolute.
+     */
+    public ParseResult<T> setSourcePath(Path sourcePath) {
+        this.sourcePath = sourcePath;
+        return this;
+    }
+
+    /**
      * @return the list of encountered parsing problems. Empty when no problems were encountered.
      */
     public List<Problem> getProblems() {
@@ -94,22 +118,26 @@ public class ParseResult<T> {
         return Optional.ofNullable(result);
     }
 
+    /**
+     * @return the absolute path to the source file this parse result originates from, or empty if no file parsing.
+     */
+    public Optional<Path> getSourcePath() {
+        return Optional.ofNullable(this.sourcePath);
+    }
+
     @Override
     public String toString() {
         if (isSuccessful()) {
             return "Parsing successful";
         }
-        StringBuilder message = new StringBuilder("Parsing failed:").append(SYSTEM_EOL);
+        StringBuilder message = new StringBuilder("Parsing failed");
+        if (sourcePath != null) {
+            message.append(" for ").append(sourcePath);
+        }
+        message.append(":").append(LineSeparator.SYSTEM);
         for (Problem problem : problems) {
-            message.append(problem.toString()).append(SYSTEM_EOL);
+            message.append(problem.toString()).append(LineSeparator.SYSTEM);
         }
         return message.toString();
-    }
-
-    /**
-     * A post processor that can be added to ParserConfiguration to add some processing right after parsing.
-     */
-    public interface PostProcessor {
-        void process(ParseResult<? extends Node> result, ParserConfiguration configuration);
     }
 }

@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2007-2010 Júlio Vilmar Gesser.
- * Copyright (C) 2011, 2013-2019 The JavaParser Team.
+ * Copyright (C) 2011, 2013-2026 The JavaParser Team.
  *
  * This file is part of JavaParser.
  *
@@ -21,6 +21,10 @@
 
 package com.github.javaparser.ast.validator;
 
+import static com.github.javaparser.ParseStart.COMPILATION_UNIT;
+import static com.github.javaparser.ParserConfiguration.LanguageLevel.JAVA_15;
+import static com.github.javaparser.Providers.provider;
+
 import com.github.javaparser.JavaParser;
 import com.github.javaparser.ParseResult;
 import com.github.javaparser.ParserConfiguration;
@@ -29,15 +33,23 @@ import com.github.javaparser.utils.TestUtils;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
-import static com.github.javaparser.ParseStart.COMPILATION_UNIT;
-import static com.github.javaparser.ParserConfiguration.LanguageLevel.JAVA_15;
-import static com.github.javaparser.Providers.provider;
-
 class Java15ValidatorTest {
 
     private final JavaParser javaParser = new JavaParser(new ParserConfiguration().setLanguageLevel(JAVA_15));
 
     // TODO: Confirm PERMITTED - text blocks
+
+    /**
+     * Local enums are only available since Java 16, while top level and member enums have existed since Java 5.
+     */
+    @Test
+    void localEnumForbidden() {
+        String s = "class X{ void x() {enum E{A,B}}}";
+        ParseResult<CompilationUnit> result = javaParser.parse(COMPILATION_UNIT, provider(s));
+        TestUtils.assertProblems(
+                result,
+                "(line 1,col 20) There is no such thing as a local enum. Pay attention that this feature is supported starting from 'JAVA_16' language level. If you need that feature the language level must be configured in the configuration before parsing the source files.");
+    }
 
     /**
      * Records are available within Java 14 (preview), Java 15 (2nd preview), and Java 16 (release).
@@ -69,9 +81,10 @@ class Java15ValidatorTest {
             void recordDeclaration() {
                 String s = "record X() { }";
                 ParseResult<CompilationUnit> result = javaParser.parse(COMPILATION_UNIT, provider(s));
-                TestUtils.assertProblems(result, "(line 1,col 1) Record Declarations are not supported.");
+                TestUtils.assertProblems(
+                        result,
+                        "(line 1,col 1) Record Declarations are not supported. Pay attention that this feature is supported starting from 'JAVA_14' language level. If you need that feature the language level must be configured in the configuration before parsing the source files.");
             }
         }
     }
-
 }

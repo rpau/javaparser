@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2007-2010 Júlio Vilmar Gesser.
- * Copyright (C) 2011, 2013-2019 The JavaParser Team.
+ * Copyright (C) 2011, 2013-2026 The JavaParser Team.
  *
  * This file is part of JavaParser.
  *
@@ -21,12 +21,12 @@
 
 package com.github.javaparser.printer.lexicalpreservation.transformations.ast;
 
+import com.github.javaparser.ParserConfiguration;
 import com.github.javaparser.ast.PackageDeclaration;
 import com.github.javaparser.ast.expr.Name;
 import com.github.javaparser.printer.lexicalpreservation.AbstractLexicalPreservingTest;
+import com.github.javaparser.utils.LineSeparator;
 import org.junit.jupiter.api.Test;
-
-import static com.github.javaparser.utils.Utils.SYSTEM_EOL;
 
 /**
  * Transforming CompilationUnit and verifying the LexicalPreservation works as expected.
@@ -39,7 +39,7 @@ class CompilationUnitTransformationsTest extends AbstractLexicalPreservingTest {
     void addingPackageDeclaration() {
         considerCode("class A {}");
         cu.setPackageDeclaration(new PackageDeclaration(new Name(new Name("foo"), "bar")));
-        assertTransformedToString("package foo.bar;"+ SYSTEM_EOL + SYSTEM_EOL + "class A {}", cu);
+        assertTransformedToString("package foo.bar;" + LineSeparator.SYSTEM + LineSeparator.SYSTEM + "class A {}", cu);
     }
 
     @Test
@@ -53,12 +53,36 @@ class CompilationUnitTransformationsTest extends AbstractLexicalPreservingTest {
     void replacingPackageDeclaration() {
         considerCode("package foo.bar; class A {}");
         cu.setPackageDeclaration(new PackageDeclaration(new Name(new Name("foo2"), "baz")));
-        assertTransformedToString("package foo2.baz;" +
-                SYSTEM_EOL + SYSTEM_EOL +
-                " class A {}", cu);
+        assertTransformedToString(
+                "package foo2.baz;" + LineSeparator.SYSTEM + LineSeparator.SYSTEM + " class A {}", cu);
     }
 
     // imports
+
+    @Test
+    void addingModuleImport() {
+        considerCode("class A {}");
+        cu.addImport("java.base", false, false, true);
+        assertTransformedToString(
+                "import module java.base;" + LineSeparator.SYSTEM + LineSeparator.SYSTEM + "class A {}", cu);
+    }
+
+    @Test
+    void removingModuleImport() {
+        // "import module ..." requires Java 25 (the default level is JAVA_11).
+        parser.getParserConfiguration().setLanguageLevel(ParserConfiguration.LanguageLevel.JAVA_25);
+        considerCode("import module java.base; class A {}");
+        cu.remove(cu.getImport(0));
+        assertTransformedToString("class A {}", cu);
+    }
+
+    @Test
+    void modifyingModuleImport() {
+        parser.getParserConfiguration().setLanguageLevel(ParserConfiguration.LanguageLevel.JAVA_25);
+        considerCode("import module java.base; class A {}");
+        cu.getImport(0).setName("a.b");
+        assertTransformedToString("import module a.b; class A {}", cu);
+    }
 
     // types
 }

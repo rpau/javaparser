@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2007-2010 Júlio Vilmar Gesser.
- * Copyright (C) 2011, 2013-2021 The JavaParser Team.
+ * Copyright (C) 2011, 2013-2026 The JavaParser Team.
  *
  * This file is part of JavaParser.
  *
@@ -20,6 +20,8 @@
  */
 package com.github.javaparser.ast.expr;
 
+import static com.github.javaparser.utils.Utils.assertNotNull;
+
 import com.github.javaparser.TokenRange;
 import com.github.javaparser.ast.AllFieldsConstructor;
 import com.github.javaparser.ast.Generated;
@@ -33,7 +35,6 @@ import com.github.javaparser.metamodel.ArrayInitializerExprMetaModel;
 import com.github.javaparser.metamodel.JavaParserMetaModel;
 import java.util.Optional;
 import java.util.function.Consumer;
-import static com.github.javaparser.utils.Utils.assertNotNull;
 
 /**
  * The initialization of an array. In the following sample, the outer { } is an ArrayInitializerExpr.
@@ -90,8 +91,7 @@ public class ArrayInitializerExpr extends Expression {
             return this;
         }
         notifyPropertyChange(ObservableProperty.VALUES, this.values, values);
-        if (this.values != null)
-            this.values.setParentNode(null);
+        if (this.values != null) this.values.setParentNode(null);
         this.values = values;
         setAsParentNodeOf(values);
         return this;
@@ -100,8 +100,9 @@ public class ArrayInitializerExpr extends Expression {
     @Override
     @Generated("com.github.javaparser.generator.core.node.RemoveMethodGenerator")
     public boolean remove(Node node) {
-        if (node == null)
+        if (node == null) {
             return false;
+        }
         for (int i = 0; i < values.size(); i++) {
             if (values.get(i) == node) {
                 values.remove(i);
@@ -126,8 +127,9 @@ public class ArrayInitializerExpr extends Expression {
     @Override
     @Generated("com.github.javaparser.generator.core.node.ReplaceMethodGenerator")
     public boolean replace(Node node, Node replacementNode) {
-        if (node == null)
+        if (node == null) {
             return false;
+        }
         for (int i = 0; i < values.size(); i++) {
             if (values.get(i) == node) {
                 values.set(i, (Expression) replacementNode);

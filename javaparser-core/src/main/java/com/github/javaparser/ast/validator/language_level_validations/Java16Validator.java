@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2007-2010 Júlio Vilmar Gesser.
- * Copyright (C) 2011, 2013-2021 The JavaParser Team.
+ * Copyright (C) 2011, 2013-2026 The JavaParser Team.
  *
  * This file is part of JavaParser.
  *
@@ -18,13 +18,7 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU Lesser General Public License for more details.
  */
-
 package com.github.javaparser.ast.validator.language_level_validations;
-
-import com.github.javaparser.ast.body.RecordDeclaration;
-import com.github.javaparser.ast.validator.SingleNodeTypeValidator;
-import com.github.javaparser.ast.validator.Validator;
-import com.github.javaparser.ast.validator.language_level_validations.chunks.RecordDeclarationValidator;
 
 /**
  * This validator validates according to Java 16 syntax rules.
@@ -35,12 +29,18 @@ public class Java16Validator extends Java15Validator {
 
     public Java16Validator() {
         super();
-
         // Released Language Features
-        remove(noPatternMatchingInstanceOf); // Pattern Matching for instanceof released within Java 16 - https://openjdk.java.net/jeps/305
+        // Pattern Matching for instanceof released within Java 16 - https://openjdk.java.net/jeps/305
+        remove(noPatternMatchingInstanceOf);
         {
             // Records released within Java 16 - https://openjdk.java.net/jeps/395
             remove(noRecordDeclaration);
+            // local interface released within Java 16 -
+            // https://docs.oracle.com/javase/specs/jls/se16/html/jls-14.html#jls-14.3
+            remove(innerClasses);
+            // local enum released within Java 16 -
+            // https://docs.oracle.com/javase/specs/jls/se16/html/jls-14.html#jls-14.3
+            remove(noLocalEnums);
             add(recordAsTypeIdentifierNotAllowed);
             add(recordDeclarationValidator);
         }

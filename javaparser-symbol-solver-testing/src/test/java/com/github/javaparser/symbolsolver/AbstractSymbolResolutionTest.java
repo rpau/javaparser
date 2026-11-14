@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2015-2016 Federico Tomassetti
- * Copyright (C) 2017-2019 The JavaParser Team.
+ * Copyright (C) 2017-2026 The JavaParser Team.
  *
  * This file is part of JavaParser.
  *
@@ -21,19 +21,23 @@
 
 package com.github.javaparser.symbolsolver;
 
+import com.github.javaparser.resolution.SymbolResolver;
+import com.github.javaparser.resolution.TypeSolver;
+import com.github.javaparser.symbolsolver.javaparsermodel.JavaParserFacade;
+import com.github.javaparser.symbolsolver.resolution.typesolvers.ReflectionTypeSolver;
+import com.github.javaparser.utils.CodeGenerationUtils;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-
 import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.AfterEach;
-
-import com.github.javaparser.ParserConfiguration;
-import com.github.javaparser.StaticJavaParser;
-import com.github.javaparser.symbolsolver.javaparsermodel.JavaParserFacade;
-import com.github.javaparser.utils.CodeGenerationUtils;
 
 public abstract class AbstractSymbolResolutionTest {
+
+    // StaticJavaParser is now reset before/after every test in this module by
+    // StaticJavaParserConfigResetExtension (auto-detected via
+    // src/test/resources/META-INF/services), so this class no longer needs its
+    // own @BeforeEach/@AfterEach reset. See that class for the full explanation
+    // of the @BeforeAll incompatibility this reset creates.
 
     @AfterAll
     public static void tearDown() {
@@ -41,91 +45,51 @@ public abstract class AbstractSymbolResolutionTest {
         JavaParserFacade.clearInstances();
     }
 
-    @AfterEach
-    public void reset() {
-        // reset configuration to not potentially disturb others tests.
-        // So we have to set specific configuration between each test.
-        StaticJavaParser.setConfiguration(new ParserConfiguration());
+    /**
+     * Whether the running JRE exposes {@code java.util.SequencedCollection} (JDK 21+).
+     */
+    protected static boolean hasSequencedCollection() {
+        try {
+            Class.forName("java.util.SequencedCollection");
+            return true;
+        } catch (ClassNotFoundException e) {
+            return false;
+        }
     }
 
     /**
-     * An initial attempt at allowing JDK-specific test cases. It is a work-in-progress, and subject to change.
-     * @deprecated <strong>Note that use of TestJdk should be a last-resort, preferably implementing JDK-agnostic tests.</strong>
+     * Whether {@code Object.wait0(long)} is present (JDK 21 split of {@code wait(long)}).
      */
-    @Deprecated
-    protected enum TestJdk {
-        JDK8(8),
-        JDK9(9),
-        JDK10(10),
-        JDK11(11),
-        JDK12(12),
-        JDK13(13),
-        JDK14(14),
-        JDK15(15),
-        JDK16(16),
-        JDK17(17);
-
-        private final Integer major;
-
-        /**
-         * @deprecated <strong>Note that use of TestJdk should be a last-resort, preferably implementing JDK-agnostic tests.</strong>
-         */
-        @Deprecated
-        TestJdk(Integer major) {
-            this.major = major;
+    protected static boolean hasWait0() {
+        try {
+            Object.class.getDeclaredMethod("wait0", long.class);
+            return true;
+        } catch (NoSuchMethodException e) {
+            return false;
         }
+    }
 
-        /**
-         * @deprecated <strong>Note that use of TestJdk should be a last-resort, preferably implementing JDK-agnostic tests.</strong>
-         */
-        @Deprecated
-        public int getMajorVersion() {
-            return this.major;
+    /**
+     * Whether {@code Object.registerNatives()} is present (removed in JDK 14).
+     */
+    protected static boolean hasRegisterNatives() {
+        try {
+            Object.class.getDeclaredMethod("registerNatives");
+            return true;
+        } catch (NoSuchMethodException e) {
+            return false;
         }
+    }
 
-        /**
-         * @deprecated <strong>Note that use of TestJdk should be a last-resort, preferably implementing JDK-agnostic tests.</strong>
-         */
-        @Deprecated
-        public static TestJdk getCurrentHostJdk() {
-            String javaVersion = System.getProperty("java.version");
-
-            // JavaParser explicitly requires a minimum of JDK8 to build.
-            if("8".equals(javaVersion) || javaVersion.startsWith("1.8") || javaVersion.startsWith("8")) {
-                return JDK8;
-            } else if("9".equals(javaVersion) || javaVersion.startsWith("9.")) {
-                return JDK9;
-            } else if("10".equals(javaVersion) || javaVersion.startsWith("10.")) {
-                return JDK10;
-            } else if("11".equals(javaVersion) || javaVersion.startsWith("11.")) {
-                return JDK11;
-            } else if("12".equals(javaVersion) || javaVersion.startsWith("12.")) {
-                return JDK12;
-            } else if("13".equals(javaVersion) || javaVersion.startsWith("13.")) {
-                return JDK13;
-            } else if("14".equals(javaVersion) || javaVersion.startsWith("14.")) {
-                return JDK14;
-            } else if("15".equals(javaVersion) || javaVersion.startsWith("15.")) {
-                return JDK15;
-            } else if("16".equals(javaVersion) || javaVersion.startsWith("16.")) {
-                return JDK16;
-            } else if("17".equals(javaVersion) || javaVersion.startsWith("17.")) {
-                return JDK17;
-            }
-
-            throw new IllegalStateException("Unable to determine the current version of java running");
-        }
-
-        /**
-         * @deprecated <strong>Note that use of TestJdk should be a last-resort, preferably implementing JDK-agnostic tests.</strong>
-         */
-        @Deprecated
-        @Override
-        public String toString() {
-            return "TestJdk{" +
-                    "System.getProperty(\"java.version\")=" + System.getProperty("java.version") +
-                    ",major=" + major +
-                    '}';
+    /**
+     * Whether {@code java.lang.constant.Constable} is present (JDK 12+).
+     */
+    protected static boolean hasConstable() {
+        try {
+            Class.forName("java.lang.constant.Constable");
+            return true;
+        } catch (ClassNotFoundException e) {
+            return false;
         }
     }
 
@@ -133,7 +97,9 @@ public abstract class AbstractSymbolResolutionTest {
         if (Files.exists(path)) {
             return path.toAbsolutePath();
         }
-        Path underSymbolSolver = CodeGenerationUtils.mavenModuleRoot(AbstractSymbolResolutionTest.class).resolve("javaparser-symbol-solver-testing").resolve(path);
+        Path underSymbolSolver = CodeGenerationUtils.mavenModuleRoot(AbstractSymbolResolutionTest.class)
+                .resolve("javaparser-symbol-solver-testing")
+                .resolve(path);
         if (Files.exists(underSymbolSolver)) {
             return underSymbolSolver;
         } else {
@@ -143,5 +109,13 @@ public abstract class AbstractSymbolResolutionTest {
 
     protected static Path adaptPath(String path) {
         return adaptPath(Paths.get(path));
+    }
+
+    protected SymbolResolver symbolResolver(TypeSolver typeSolver) {
+        return new JavaSymbolSolver(typeSolver);
+    }
+
+    protected TypeSolver defaultTypeSolver() {
+        return new ReflectionTypeSolver();
     }
 }

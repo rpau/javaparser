@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2007-2010 Júlio Vilmar Gesser.
- * Copyright (C) 2011, 2013-2021 The JavaParser Team.
+ * Copyright (C) 2011, 2013-2026 The JavaParser Team.
  *
  * This file is part of JavaParser.
  *
@@ -21,6 +21,10 @@
 
 package com.github.javaparser.generator.core.node;
 
+import static com.github.javaparser.StaticJavaParser.parseBodyDeclaration;
+import static com.github.javaparser.utils.CodeGenerationUtils.f;
+import static com.github.javaparser.utils.Utils.capitalize;
+
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.Node;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
@@ -31,26 +35,23 @@ import com.github.javaparser.metamodel.BaseNodeMetaModel;
 import com.github.javaparser.metamodel.PropertyMetaModel;
 import com.github.javaparser.utils.SourceRoot;
 
-import static com.github.javaparser.StaticJavaParser.parseBodyDeclaration;
-import static com.github.javaparser.utils.CodeGenerationUtils.f;
-import static com.github.javaparser.utils.Utils.capitalize;
-
-
 public class RemoveMethodGenerator extends NodeGenerator {
     public RemoveMethodGenerator(SourceRoot sourceRoot) {
         super(sourceRoot);
     }
 
     @Override
-    protected void generateNode(BaseNodeMetaModel nodeMetaModel, CompilationUnit nodeCu, ClassOrInterfaceDeclaration nodeCoid) {
-        MethodDeclaration removeNodeMethod = (MethodDeclaration) parseBodyDeclaration("public boolean remove(Node node) {}");
+    protected void generateNode(
+            BaseNodeMetaModel nodeMetaModel, CompilationUnit nodeCu, ClassOrInterfaceDeclaration nodeCoid) {
+        MethodDeclaration removeNodeMethod =
+                (MethodDeclaration) parseBodyDeclaration("public boolean remove(Node node) {}");
         nodeCu.addImport(Node.class);
         annotateWhenOverridden(nodeMetaModel, removeNodeMethod);
 
         final BlockStmt body = removeNodeMethod.getBody().get();
 
-        body.addStatement("if (node == null) return false;");
-
+        body.addStatement("if (node == null) { return false; }");
+        int numberPropertiesDeclared = 0;
         for (PropertyMetaModel property : nodeMetaModel.getDeclaredPropertyMetaModels()) {
             if (!property.isNode()) {
                 continue;
@@ -69,35 +70,42 @@ public class RemoveMethodGenerator extends NodeGenerator {
                 check = f("if (%s != null) { %s }", property.getName(), check);
             }
             body.addStatement(check);
+            numberPropertiesDeclared++;
         }
         if (nodeMetaModel.getSuperNodeMetaModel().isPresent()) {
             body.addStatement("return super.remove(node);");
         } else {
             body.addStatement("return false;");
         }
-        
-        addOrReplaceWhenSameSignature(nodeCoid, removeNodeMethod);
+
+        if (!nodeMetaModel.isRootNode() && numberPropertiesDeclared == 0) {
+            removeMethodWithSameSignature(nodeCoid, removeNodeMethod);
+        } else {
+            addOrReplaceWhenSameSignature(nodeCoid, removeNodeMethod);
+        }
     }
 
     private String attributeCheck(PropertyMetaModel property, String removeAttributeMethodName) {
-        return f("if (node == %s) {" +
-                "    %s();" +
-                "    return true;\n" +
-                "}", property.getName(), removeAttributeMethodName);
+        return f(
+                "if (node == %s) {" + "    %s();" + "    return true;\n" + "}",
+                property.getName(), removeAttributeMethodName);
     }
 
     private String nodeListCheck(PropertyMetaModel property) {
-        return f("for (int i = 0; i < %s.size(); i++) {" +
-                "  if (%s.get(i) == node) {" +
-                "    %s.remove(i);" +
-                "    return true;" +
-                "  }" +
-                "}", property.getName(), property.getName(), property.getName());
+        return f(
+                "for (int i = 0; i < %s.size(); i++) {" + "  if (%s.get(i) == node) {"
+                        + "    %s.remove(i);"
+                        + "    return true;"
+                        + "  }"
+                        + "}",
+                property.getName(), property.getName(), property.getName());
     }
 
-    private String generateRemoveMethodForAttribute(ClassOrInterfaceDeclaration nodeCoid, BaseNodeMetaModel nodeMetaModel, PropertyMetaModel property) {
+    private String generateRemoveMethodForAttribute(
+            ClassOrInterfaceDeclaration nodeCoid, BaseNodeMetaModel nodeMetaModel, PropertyMetaModel property) {
         final String methodName = "remove" + capitalize(property.getName());
-        final MethodDeclaration removeMethod = (MethodDeclaration) parseBodyDeclaration(f("public %s %s() {}", nodeMetaModel.getTypeName(), methodName));
+        final MethodDeclaration removeMethod = (MethodDeclaration)
+                parseBodyDeclaration(f("public %s %s() {}", nodeMetaModel.getTypeName(), methodName));
 
         final BlockStmt block = removeMethod.getBody().get();
         block.addStatement(f("return %s((%s) null);", property.getSetterMethodName(), property.getTypeNameForSetter()));

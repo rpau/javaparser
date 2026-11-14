@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2015-2016 Federico Tomassetti
- * Copyright (C) 2017-2020 The JavaParser Team.
+ * Copyright (C) 2017-2026 The JavaParser Team.
  *
  * This file is part of JavaParser.
  *
@@ -21,31 +21,32 @@
 
 package com.github.javaparser.symbolsolver.javaparsermodel.contexts;
 
-import com.github.javaparser.ast.AccessSpecifier;
+import static com.github.javaparser.symbolsolver.javaparsermodel.contexts.ClassOrInterfaceDeclarationContext.JAVA_BASE_MODULE_NAME;
+
+import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.body.BodyDeclaration;
+import com.github.javaparser.ast.body.TypeDeclaration;
+import com.github.javaparser.ast.nodeTypes.NodeWithExtends;
+import com.github.javaparser.ast.nodeTypes.NodeWithImplements;
+import com.github.javaparser.ast.nodeTypes.NodeWithTypeArguments;
 import com.github.javaparser.ast.nodeTypes.NodeWithTypeParameters;
+import com.github.javaparser.ast.type.ClassOrInterfaceType;
+import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.ast.type.TypeParameter;
-import com.github.javaparser.resolution.declarations.HasAccessSpecifier;
-import com.github.javaparser.resolution.declarations.ResolvedClassDeclaration;
-import com.github.javaparser.resolution.declarations.ResolvedConstructorDeclaration;
-import com.github.javaparser.resolution.declarations.ResolvedMethodDeclaration;
-import com.github.javaparser.resolution.declarations.ResolvedReferenceTypeDeclaration;
-import com.github.javaparser.resolution.declarations.ResolvedTypeDeclaration;
-import com.github.javaparser.resolution.types.ResolvedReferenceType;
+import com.github.javaparser.resolution.Context;
+import com.github.javaparser.resolution.TypeSolver;
+import com.github.javaparser.resolution.declarations.*;
+import com.github.javaparser.resolution.logic.ConstructorResolutionLogic;
+import com.github.javaparser.resolution.logic.MethodResolutionLogic;
+import com.github.javaparser.resolution.model.SymbolReference;
 import com.github.javaparser.resolution.types.ResolvedType;
-import com.github.javaparser.symbolsolver.core.resolution.Context;
 import com.github.javaparser.symbolsolver.javaparsermodel.JavaParserFacade;
 import com.github.javaparser.symbolsolver.javaparsermodel.JavaParserFactory;
+import com.github.javaparser.symbolsolver.javaparsermodel.declarations.JavaParserClassDeclaration;
+import com.github.javaparser.symbolsolver.javaparsermodel.declarations.JavaParserInterfaceDeclaration;
 import com.github.javaparser.symbolsolver.javaparsermodel.declarations.JavaParserTypeParameter;
-import com.github.javaparser.symbolsolver.model.resolution.SymbolReference;
-import com.github.javaparser.symbolsolver.model.resolution.TypeSolver;
-import com.github.javaparser.symbolsolver.reflectionmodel.ReflectionClassDeclaration;
-import com.github.javaparser.symbolsolver.resolution.ConstructorResolutionLogic;
-import com.github.javaparser.symbolsolver.resolution.MethodResolutionLogic;
-
+import com.github.javaparser.symbolsolver.logic.MemberResolutionLogic;
 import java.util.List;
-import java.util.Optional;
-import java.util.stream.Collectors;
 
 /**
  * @author Federico Tomassetti
@@ -57,136 +58,189 @@ public class JavaParserTypeDeclarationAdapter {
     private Context context;
     private ResolvedReferenceTypeDeclaration typeDeclaration;
 
-    public JavaParserTypeDeclarationAdapter(com.github.javaparser.ast.body.TypeDeclaration<?> wrappedNode, TypeSolver typeSolver,
-                                            ResolvedReferenceTypeDeclaration typeDeclaration,
-                                            Context context) {
+    public JavaParserTypeDeclarationAdapter(
+            com.github.javaparser.ast.body.TypeDeclaration<?> wrappedNode,
+            TypeSolver typeSolver,
+            ResolvedReferenceTypeDeclaration typeDeclaration,
+            Context context) {
         this.wrappedNode = wrappedNode;
         this.typeSolver = typeSolver;
         this.typeDeclaration = typeDeclaration;
         this.context = context;
     }
 
+    /**
+     * @deprecated Consider using {@link #solveType(String, List)} to consider type arguments.
+     */
+    @Deprecated
     public SymbolReference<ResolvedTypeDeclaration> solveType(String name) {
+        return solveType(name, null);
+    }
+
+    public SymbolReference<ResolvedTypeDeclaration> solveType(String name, List<ResolvedType> typeArguments) {
         if (this.wrappedNode.getName().getId().equals(name)) {
             return SymbolReference.solved(JavaParserFacade.get(typeSolver).getTypeDeclaration(wrappedNode));
         }
 
+        if (this.wrappedNode.isClassOrInterfaceDeclaration()
+                && this.wrappedNode.asClassOrInterfaceDeclaration().isCompact()) {
+            // Compact classes implicitly import the java.base module. To avoid having to add this import explicitly,
+            // first check if the class is compact and then try to solve the given type in the java.base module.
+            SymbolReference<ResolvedReferenceTypeDeclaration> maybeSolved =
+                    typeSolver.tryToSolveTypeInModule(JAVA_BASE_MODULE_NAME, name);
+            if (maybeSolved.isSolved()) {
+                return SymbolReference.solved((ResolvedTypeDeclaration) maybeSolved.getCorrespondingDeclaration());
+            }
+        }
+
         // Internal classes
         for (BodyDeclaration<?> member : this.wrappedNode.getMembers()) {
-            if (member instanceof com.github.javaparser.ast.body.TypeDeclaration) {
-                com.github.javaparser.ast.body.TypeDeclaration<?> internalType = (com.github.javaparser.ast.body.TypeDeclaration<?>) member;
-                if (internalType.getName().getId().equals(name)) {
-                    return SymbolReference.solved(JavaParserFacade.get(typeSolver).getTypeDeclaration(internalType));
-                } else if (name.startsWith(String.format("%s.%s", wrappedNode.getName(), internalType.getName()))) {
-                    return JavaParserFactory.getContext(internalType, typeSolver).solveType(name.substring(wrappedNode.getName().getId().length() + 1));
-                } else if (name.startsWith(String.format("%s.", internalType.getName()))) {
-                    return JavaParserFactory.getContext(internalType, typeSolver).solveType(name.substring(internalType.getName().getId().length() + 1));
+            if (member.isTypeDeclaration()) {
+                TypeDeclaration<?> internalType = member.asTypeDeclaration();
+                if (internalType.getName().getId().equals(name) && compareTypeParameters(internalType, typeArguments)) {
+                    return SymbolReference.solved(
+                            JavaParserFacade.get(typeSolver).getTypeDeclaration(internalType));
+                }
+                if (name.startsWith(wrappedNode.getName().getId() + "."
+                        + internalType.getName().getId())) {
+                    return JavaParserFactory.getContext(internalType, typeSolver)
+                            .solveType(
+                                    name.substring(wrappedNode.getName().getId().length() + 1), typeArguments);
+                }
+                if (name.startsWith(internalType.getName().getId() + ".")) {
+                    return JavaParserFactory.getContext(internalType, typeSolver)
+                            .solveType(
+                                    name.substring(
+                                            internalType.getName().getId().length() + 1),
+                                    typeArguments);
                 }
             }
         }
 
+        // A type parameter declared here shadows any same-named type in an enclosing scope (JLS 6.4.1),
+        // so it has to be checked before delegating to the parent context.
         if (wrappedNode instanceof NodeWithTypeParameters) {
             NodeWithTypeParameters<?> nodeWithTypeParameters = (NodeWithTypeParameters<?>) wrappedNode;
             for (TypeParameter astTpRaw : nodeWithTypeParameters.getTypeParameters()) {
-                TypeParameter astTp = astTpRaw;
-                if (astTp.getName().getId().equals(name)) {
-                    return SymbolReference.solved(new JavaParserTypeParameter(astTp, typeSolver));
+                if (astTpRaw.getName().getId().equals(name)) {
+                    return SymbolReference.solved(new JavaParserTypeParameter(astTpRaw, typeSolver));
                 }
             }
         }
 
-        // Look into extended classes and implemented interfaces
-        ResolvedTypeDeclaration type = checkAncestorsForType(name, this.typeDeclaration);
-        if (type != null) {
-            return SymbolReference.solved(type);
-        }
-
-        // Else check parents
-        return context.getParent()
+        // Before checking the ancestors of the node,
+        // it is necessary to check that the name to be resolved is not declared in the compilation unit.
+        // An example is provided in the issue https://github.com/javaparser/javaparser/issues/3214
+        SymbolReference<ResolvedTypeDeclaration> symbolRef = context.getParent()
                 .orElseThrow(() -> new RuntimeException("Parent context unexpectedly empty."))
-                .solveType(name);
-    }
+                .solveType(name, typeArguments);
+        if (symbolRef.isSolved()) return symbolRef;
 
-    /**
-     * Recursively checks the ancestors of the {@param declaration} if an internal type is declared with a name equal
-     * to {@param name}.
-     * TODO: Edit to remove return of null (favouring a return of optional)
-     * @return A ResolvedTypeDeclaration matching the {@param name}, null otherwise
-     */
-    private ResolvedTypeDeclaration checkAncestorsForType(String name, ResolvedReferenceTypeDeclaration declaration) {
-        for (ResolvedReferenceType ancestor : declaration.getAncestors(true)) {
-            try {
-                // TODO: Figure out if it is appropriate to remove the orElseThrow() -- if so, how...
-                ResolvedReferenceTypeDeclaration ancestorReferenceTypeDeclaration = ancestor
-                        .getTypeDeclaration()
-                        .orElseThrow(() -> new RuntimeException("TypeDeclaration unexpectedly empty."));
-
-                for (ResolvedTypeDeclaration internalTypeDeclaration : ancestorReferenceTypeDeclaration.internalTypes()) {
-                    boolean visible = true;
-                    if (internalTypeDeclaration instanceof ResolvedReferenceTypeDeclaration) {
-                        ResolvedReferenceTypeDeclaration resolvedReferenceTypeDeclaration = internalTypeDeclaration.asReferenceType();
-                        if (resolvedReferenceTypeDeclaration instanceof HasAccessSpecifier) {
-                            visible = ((HasAccessSpecifier) resolvedReferenceTypeDeclaration).accessSpecifier() != AccessSpecifier.PRIVATE;
-                        }
-                    }
-                    if (internalTypeDeclaration.getName().equals(name)) {
-                        if (visible) {
-                            return internalTypeDeclaration;
-                        } else {
-                            return null; // FIXME -- Avoid returning null.
-                        }
-                    }
-                }
-
-                // check recursively the ancestors of this ancestor
-                ResolvedTypeDeclaration ancestorTypeDeclaration = checkAncestorsForType(name, ancestorReferenceTypeDeclaration);
-                if (ancestorTypeDeclaration != null) {
-                    return ancestorTypeDeclaration;
-                }
-            } catch (UnsupportedOperationException e) {
-                // just continue using the next ancestor
-            }
-        }
-        return null; // FIXME -- Avoid returning null.
-    }
-
-    public SymbolReference<ResolvedMethodDeclaration> solveMethod(String name, List<ResolvedType> argumentsTypes, boolean staticOnly) {
-
-        // Begin by locating methods declared "here"
-        List<ResolvedMethodDeclaration> candidateMethods = typeDeclaration.getDeclaredMethods().stream()
-                .filter(m -> m.getName().equals(name))
-                .filter(m -> !staticOnly || m.isStatic())
-                .collect(Collectors.toList());
-
-        // Next, consider methods declared within ancestors.
-        // Note that we only consider ancestors when we are not currently at java.lang.Object (avoiding infinite recursion).
-        if (!typeDeclaration.isJavaLangObject()) {
-            for (ResolvedReferenceType ancestor : typeDeclaration.getAncestors(true)) {
-                Optional<ResolvedReferenceTypeDeclaration> ancestorTypeDeclaration = ancestor.getTypeDeclaration();
-
-                // Avoid recursion on self
-                if (ancestor.getTypeDeclaration().isPresent() && typeDeclaration != ancestorTypeDeclaration.get()) {
-                    // Consider methods declared on self
-                    candidateMethods.addAll(ancestor.getAllMethodsVisibleToInheritors()
-                            .stream()
-                            .filter(m -> m.getName().equals(name))
-                            .collect(Collectors.toList()));
-
-                    // consider methods from superclasses and only default methods from interfaces :
-                    // not true, we should keep abstract as a valid candidate
-                    // abstract are removed in MethodResolutionLogic.isApplicable is necessary
-                    SymbolReference<ResolvedMethodDeclaration> res = MethodResolutionLogic.solveMethodInType(ancestorTypeDeclaration.get(), name, argumentsTypes, staticOnly);
-                    if (res.isSolved()) {
-                        candidateMethods.add(res.getCorrespondingDeclaration());
-                    }
+        // Check if the node implements other types
+        if (wrappedNode instanceof NodeWithImplements) {
+            NodeWithImplements<?> nodeWithImplements = (NodeWithImplements<?>) wrappedNode;
+            for (ClassOrInterfaceType implementedType : nodeWithImplements.getImplementedTypes()) {
+                if (implementedType.getName().getId().equals(name)) {
+                    return context.getParent()
+                            .orElseThrow(() -> new RuntimeException("Parent context unexpectedly empty."))
+                            .solveType(implementedType.getNameWithScope(), typeArguments);
                 }
             }
         }
 
-        // If we haven't located any candidates that are declared on this type or its ancestors, consider the parent context.
+        // Check if the node extends other types
+        if (wrappedNode instanceof NodeWithExtends) {
+            NodeWithExtends<?> nodeWithExtends = (NodeWithExtends<?>) wrappedNode;
+            for (ClassOrInterfaceType extendedType : nodeWithExtends.getExtendedTypes()) {
+                if (extendedType.getName().getId().equals(name) && compareTypeArguments(extendedType, typeArguments)) {
+                    return context.getParent()
+                            .orElseThrow(() -> new RuntimeException("Parent context unexpectedly empty."))
+                            .solveType(extendedType.getNameWithScope(), typeArguments);
+                }
+            }
+        }
+
+        // Looking at extended classes and implemented interfaces.
+        // For a composite name like "Sub.Test" where "Sub" is itself an inherited nested type,
+        // resolve iteratively: find "Sub" in ancestors, then resolve "Test" within it (#3550).
+        if (isCompositeName(name)) {
+            int firstDot = name.indexOf('.');
+            String outerName = name.substring(0, firstDot);
+            String remainingName = name.substring(firstDot + 1);
+            ResolvedTypeDeclaration outerType =
+                    MemberResolutionLogic.checkAncestorsForType(outerName, this.typeDeclaration);
+            if (outerType instanceof JavaParserClassDeclaration) {
+                SymbolReference<ResolvedTypeDeclaration> innerRef =
+                        ((JavaParserClassDeclaration) outerType).solveType(remainingName);
+                if (innerRef.isSolved()) return innerRef;
+            } else if (outerType instanceof JavaParserInterfaceDeclaration) {
+                SymbolReference<ResolvedTypeDeclaration> innerRef =
+                        ((JavaParserInterfaceDeclaration) outerType).solveType(remainingName);
+                if (innerRef.isSolved()) return innerRef;
+            }
+        } else {
+            ResolvedTypeDeclaration type = MemberResolutionLogic.checkAncestorsForType(name, this.typeDeclaration);
+            if (type != null) {
+                return SymbolReference.solved(type);
+            }
+        }
+
+        return SymbolReference.unsolved();
+    }
+
+    private boolean isCompositeName(String name) {
+        return name.indexOf('.') > -1;
+    }
+
+    private String innerMostPartOfName(String name) {
+        return isCompositeName(name) ? name.substring(name.lastIndexOf(".") + 1) : name;
+    }
+
+    private String outerMostPartOfName(String name) {
+        return isCompositeName(name) ? name.substring(0, name.lastIndexOf(".")) : name;
+    }
+
+    private <T extends NodeWithTypeArguments<?>> boolean compareTypes(
+            List<? extends Type> types, List<ResolvedType> resolvedTypeArguments) {
+        // If the user want's to solve the type without having prior knowledge of the type arguments.
+        if (resolvedTypeArguments == null) {
+            return true;
+        }
+
+        return types.size() == resolvedTypeArguments.size();
+    }
+
+    private <T extends NodeWithTypeArguments<?>> boolean compareTypeArguments(
+            T type, List<ResolvedType> resolvedTypeArguments) {
+        return compareTypes(type.getTypeArguments().orElse(new NodeList<>()), resolvedTypeArguments);
+    }
+
+    private <T extends NodeWithTypeParameters<?>> boolean compareTypeParameters(
+            T type, List<ResolvedType> resolvedTypeArguments) {
+        return compareTypes(type.getTypeParameters(), resolvedTypeArguments);
+    }
+
+    private boolean compareTypeParameters(
+            TypeDeclaration<?> typeDeclaration, List<ResolvedType> resolvedTypeArguments) {
+        if (typeDeclaration instanceof NodeWithTypeParameters) {
+            return compareTypeParameters((NodeWithTypeParameters<?>) typeDeclaration, resolvedTypeArguments);
+        }
+        return true;
+    }
+
+    public SymbolReference<ResolvedMethodDeclaration> solveMethod(
+            String name, List<ResolvedType> argumentsTypes, boolean staticOnly) {
+
+        // Begin by locating the methods this type declares or inherits.
+        List<ResolvedMethodDeclaration> candidateMethods =
+                MemberResolutionLogic.collectCandidateMembers(typeDeclaration, name, argumentsTypes, staticOnly);
+
+        // If we haven't located any candidates that are declared on this type or its ancestors, consider the parent
+        // context.
         // This is relevant e.g. with nested classes.
         // Note that we want to avoid infinite recursion when a class is using its own method - see issue #75
-        if (candidateMethods.isEmpty()) {
+        // We also want to avoid infinite recursion when handling static imports - see issue #4358
+        if (candidateMethods.isEmpty() && !staticOnly) {
             SymbolReference<ResolvedMethodDeclaration> parentSolution = context.getParent()
                     .orElseThrow(() -> new RuntimeException("Parent context unexpectedly empty."))
                     .solveMethod(name, argumentsTypes, staticOnly);
@@ -197,19 +251,28 @@ public class JavaParserTypeDeclarationAdapter {
 
         // if is interface and candidate method list is empty, we should check the Object Methods
         if (candidateMethods.isEmpty() && typeDeclaration.isInterface()) {
-            SymbolReference<ResolvedMethodDeclaration> res = MethodResolutionLogic.solveMethodInType(new ReflectionClassDeclaration(Object.class, typeSolver), name, argumentsTypes, false);
+            SymbolReference<ResolvedMethodDeclaration> res = MethodResolutionLogic.solveMethodInType(
+                    typeSolver.getSolvedJavaLangObject(), name, argumentsTypes, false);
             if (res.isSolved()) {
                 candidateMethods.add(res.getCorrespondingDeclaration());
             }
         }
 
-        return MethodResolutionLogic.findMostApplicable(candidateMethods, name, argumentsTypes, typeSolver);
+        // A call without a receiver is made from within the type: inherited methods are compared with the type
+        // arguments that its hierarchy supplies, its own type variables standing for themselves.
+        return MethodResolutionLogic.findMostApplicable(
+                candidateMethods,
+                name,
+                argumentsTypes,
+                typeSolver,
+                MemberResolutionLogic.parameterTypesSeenFrom(typeDeclaration));
     }
 
     public SymbolReference<ResolvedConstructorDeclaration> solveConstructor(List<ResolvedType> argumentsTypes) {
         if (typeDeclaration instanceof ResolvedClassDeclaration) {
-            return ConstructorResolutionLogic.findMostApplicable(typeDeclaration.getConstructors(), argumentsTypes, typeSolver);
+            return ConstructorResolutionLogic.findMostApplicable(
+                    typeDeclaration.getConstructors(), argumentsTypes, typeSolver);
         }
-        return SymbolReference.unsolved(ResolvedConstructorDeclaration.class);
+        return SymbolReference.unsolved();
     }
 }

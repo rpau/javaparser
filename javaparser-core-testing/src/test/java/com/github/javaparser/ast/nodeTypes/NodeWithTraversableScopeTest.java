@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2007-2010 Júlio Vilmar Gesser.
- * Copyright (C) 2011, 2013-2019 The JavaParser Team.
+ * Copyright (C) 2011, 2013-2026 The JavaParser Team.
  *
  * This file is part of JavaParser.
  *
@@ -21,18 +21,22 @@
 
 package com.github.javaparser.ast.nodeTypes;
 
+import static com.github.javaparser.utils.TestUtils.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+
+import com.github.javaparser.JavaParserAdapter;
+import com.github.javaparser.StaticJavaParser;
 import com.github.javaparser.ast.expr.FieldAccessExpr;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 import org.junit.jupiter.api.Test;
 
-import static com.github.javaparser.StaticJavaParser.parseExpression;
-import static com.github.javaparser.utils.TestUtils.assertInstanceOf;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-
 class NodeWithTraversableScopeTest {
+
+    private final JavaParserAdapter parser = StaticJavaParser.newParserAdapter();
+
     @Test
     void traverse1() {
-        NodeWithTraversableScope expression = parseExpression("getAddress().name.startsWith(\"abc\")");
+        NodeWithTraversableScope expression = parser.parseExpression("getAddress().name.startsWith(\"abc\")");
 
         assertInstanceOf(MethodCallExpr.class, expression);
         expression = (NodeWithTraversableScope) expression.traverseScope().get();

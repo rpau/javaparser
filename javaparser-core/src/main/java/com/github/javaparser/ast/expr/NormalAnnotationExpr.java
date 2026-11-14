@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2007-2010 Júlio Vilmar Gesser.
- * Copyright (C) 2011, 2013-2021 The JavaParser Team.
+ * Copyright (C) 2011, 2013-2026 The JavaParser Team.
  *
  * This file is part of JavaParser.
  *
@@ -20,6 +20,8 @@
  */
 package com.github.javaparser.ast.expr;
 
+import static com.github.javaparser.utils.Utils.assertNotNull;
+
 import com.github.javaparser.TokenRange;
 import com.github.javaparser.ast.AllFieldsConstructor;
 import com.github.javaparser.ast.Generated;
@@ -33,10 +35,9 @@ import com.github.javaparser.metamodel.JavaParserMetaModel;
 import com.github.javaparser.metamodel.NormalAnnotationExprMetaModel;
 import java.util.Optional;
 import java.util.function.Consumer;
-import static com.github.javaparser.utils.Utils.assertNotNull;
 
 /**
- * An annotation that has zero or more key-value pairs.<br>{@code @Mapping(a=5, d=10)}
+ * An annotation that has one or more key-value pairs.<br>{@code @Mapping(a=5, d=10)}
  * @author Julio Vilmar Gesser
  */
 public class NormalAnnotationExpr extends AnnotationExpr {
@@ -86,8 +87,7 @@ public class NormalAnnotationExpr extends AnnotationExpr {
             return this;
         }
         notifyPropertyChange(ObservableProperty.PAIRS, this.pairs, pairs);
-        if (this.pairs != null)
-            this.pairs.setParentNode(null);
+        if (this.pairs != null) this.pairs.setParentNode(null);
         this.pairs = pairs;
         setAsParentNodeOf(pairs);
         return this;
@@ -116,8 +116,9 @@ public class NormalAnnotationExpr extends AnnotationExpr {
     @Override
     @Generated("com.github.javaparser.generator.core.node.RemoveMethodGenerator")
     public boolean remove(Node node) {
-        if (node == null)
+        if (node == null) {
             return false;
+        }
         for (int i = 0; i < pairs.size(); i++) {
             if (pairs.get(i) == node) {
                 pairs.remove(i);
@@ -142,8 +143,9 @@ public class NormalAnnotationExpr extends AnnotationExpr {
     @Override
     @Generated("com.github.javaparser.generator.core.node.ReplaceMethodGenerator")
     public boolean replace(Node node, Node replacementNode) {
-        if (node == null)
+        if (node == null) {
             return false;
+        }
         for (int i = 0; i < pairs.size(); i++) {
             if (pairs.get(i) == node) {
                 pairs.set(i, (MemberValuePair) replacementNode);

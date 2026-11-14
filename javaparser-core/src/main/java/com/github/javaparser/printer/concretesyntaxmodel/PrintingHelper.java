@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2007-2010 Júlio Vilmar Gesser.
- * Copyright (C) 2011, 2013-2021 The JavaParser Team.
+ * Copyright (C) 2011, 2013-2026 The JavaParser Team.
  *
  * This file is part of JavaParser.
  *
@@ -18,19 +18,19 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU Lesser General Public License for more details.
  */
-
 package com.github.javaparser.printer.concretesyntaxmodel;
 
 import com.github.javaparser.printer.Stringable;
+import java.util.Locale;
 
 class PrintingHelper {
 
     static String printToString(Object value) {
         if (value instanceof Stringable) {
-            return ((Stringable)value).asString();
+            return ((Stringable) value).asString();
         }
         if (value instanceof Enum) {
-            return ((Enum) value).name().toLowerCase();
+            return ((Enum) value).name().toLowerCase(Locale.ROOT);
         } else {
             if (value != null) {
                 return value.toString();

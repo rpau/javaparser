@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2007-2010 Júlio Vilmar Gesser.
- * Copyright (C) 2011, 2013-2019 The JavaParser Team.
+ * Copyright (C) 2011, 2013-2026 The JavaParser Team.
  *
  * This file is part of JavaParser.
  *
@@ -21,23 +21,38 @@
 
 package com.github.javaparser.ast.expr;
 
-import org.junit.jupiter.api.Test;
-
-import static com.github.javaparser.StaticJavaParser.parseExpression;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.github.javaparser.JavaParser;
+import com.github.javaparser.JavaParserAdapter;
+import com.github.javaparser.ParseResult;
+import com.github.javaparser.ParserConfiguration;
+import com.github.javaparser.StaticJavaParser;
+import org.junit.jupiter.api.Test;
+
 class ThisExprTest {
+
+    private final JavaParserAdapter parser = StaticJavaParser.newParserAdapter();
+
     @Test
     void justThis() {
-        Expression expr = parseExpression("this");
+        Expression expr = parser.parseExpression("this");
 
         assertTrue(expr.isThisExpr());
     }
 
     @Test
+    void justThisName() {
+        JavaParser javaParser = new JavaParser(new ParserConfiguration().setStoreTokens(false));
+        ParseResult<Expression> parseResult = javaParser.parseExpression("this.c");
+        FieldAccessExpr fieldAccess = parseResult.getResult().get().asFieldAccessExpr();
+        assertEquals("c", fieldAccess.getName().asString());
+    }
+
+    @Test
     void singleScopeThis() {
-        Expression expr = parseExpression("A.this");
+        Expression expr = parser.parseExpression("A.this");
 
         Name className = expr.asThisExpr().getTypeName().get();
 
@@ -45,11 +60,27 @@ class ThisExprTest {
     }
 
     @Test
+    void singleScopeThisName() {
+        JavaParser javaParser = new JavaParser(new ParserConfiguration().setStoreTokens(false));
+        ParseResult<Expression> parseResult = javaParser.parseExpression("A.this.c");
+        FieldAccessExpr fieldAccess = parseResult.getResult().get().asFieldAccessExpr();
+        assertEquals("c", fieldAccess.getName().asString());
+    }
+
+    @Test
     void multiScopeThis() {
-        Expression expr = parseExpression("a.B.this");
+        Expression expr = parser.parseExpression("a.B.this");
 
         Name className = expr.asThisExpr().getTypeName().get();
 
         assertEquals("a.B", className.asString());
+    }
+
+    @Test
+    void multiScopeThisName() {
+        JavaParser javaParser = new JavaParser(new ParserConfiguration().setStoreTokens(false));
+        ParseResult<Expression> parseResult = javaParser.parseExpression("a.B.this.c");
+        FieldAccessExpr fieldAccess = parseResult.getResult().get().asFieldAccessExpr();
+        assertEquals("c", fieldAccess.getName().asString());
     }
 }

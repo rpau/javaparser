@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2015-2016 Federico Tomassetti
- * Copyright (C) 2017-2020 The JavaParser Team.
+ * Copyright (C) 2017-2026 The JavaParser Team.
  *
  * This file is part of JavaParser.
  *
@@ -21,15 +21,14 @@
 
 package com.github.javaparser.symbolsolver.resolution.typesolvers;
 
+import com.github.javaparser.resolution.TypeSolver;
 import com.github.javaparser.resolution.UnsolvedSymbolException;
+import com.github.javaparser.resolution.cache.Cache;
 import com.github.javaparser.resolution.declarations.ResolvedReferenceTypeDeclaration;
-import com.github.javaparser.symbolsolver.model.resolution.SymbolReference;
-import com.github.javaparser.symbolsolver.model.resolution.TypeSolver;
-
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Objects;
+import com.github.javaparser.resolution.model.SymbolReference;
+import com.github.javaparser.symbolsolver.cache.InMemoryCache;
+import java.util.*;
+import java.util.function.Function;
 import java.util.function.Predicate;
 
 /**
@@ -40,18 +39,20 @@ import java.util.function.Predicate;
  */
 public class CombinedTypeSolver implements TypeSolver {
 
+    private final Cache<String, SymbolReference<ResolvedReferenceTypeDeclaration>> typeCache;
+
     private TypeSolver parent;
     private List<TypeSolver> elements = new ArrayList<>();
-    
+
     /**
      * A predicate which determines what to do if an exception is raised during the parsing process.
      * If it returns {@code true} the exception will be ignored, and solving will continue using the next solver in line.
      * If it returns {@code false} the exception will be thrown, stopping the solving process.
-     * 
+     *
      * Main use case for this is to circumvent bugs or missing functionality in some type solvers.
      * If for example solver A has a bug resulting in a {@link NullPointerException}, you could use a {@link ExceptionHandlers#getTypeBasedWhitelist(Class...) whitelist} to ignore that type of exception.
      * A secondary solver would then be able to step in when such an error occurs.
-     * 
+     *
      * @see #CombinedTypeSolver(Predicate, TypeSolver...)
      * @see #setExceptionHandler(Predicate)
      */
@@ -71,10 +72,29 @@ public class CombinedTypeSolver implements TypeSolver {
 
     /** @see #exceptionHandler */
     public CombinedTypeSolver(Predicate<Exception> exceptionHandler, Iterable<TypeSolver> elements) {
+        this(exceptionHandler, elements, InMemoryCache.create());
+    }
+
+    /**
+     * Create a new instance of {@link CombinedTypeSolver} with a custom symbol cache.
+     *
+     * @param exceptionHandler  How exception should be handled.
+     * @param elements          The list of elements to include by default.
+     * @param typeCache       The cache to be used to store symbols.
+     *
+     * @see #exceptionHandler
+     */
+    public CombinedTypeSolver(
+            Predicate<Exception> exceptionHandler,
+            Iterable<TypeSolver> elements,
+            Cache<String, SymbolReference<ResolvedReferenceTypeDeclaration>> typeCache) {
+        Objects.requireNonNull(typeCache, "The typeCache can't be null.");
+
         setExceptionHandler(exceptionHandler);
+        this.typeCache = typeCache;
 
         for (TypeSolver el : elements) {
-            add(el);
+            add(el, false);
         }
     }
 
@@ -100,17 +120,70 @@ public class CombinedTypeSolver implements TypeSolver {
         this.parent = parent;
     }
 
-    public void add(TypeSolver typeSolver) {
+    /**
+     * Append a type solver to the current solver.
+     *
+     * @param typeSolver The type solver to be appended.
+     * @param resetCache If should reset the cache when the solver is inserted.
+     */
+    public void add(TypeSolver typeSolver, boolean resetCache) {
+        Objects.requireNonNull(typeSolver, "The type solver can't be null");
+
         this.elements.add(typeSolver);
         typeSolver.setParent(this);
+
+        // Check if the cache should be reset after inserting
+        if (resetCache) {
+            typeCache.removeAll();
+        }
+    }
+
+    /**
+     * Append a type solver to the current solver.
+     * <br>
+     * By default the cached values will be removed.
+     *
+     * @param typeSolver The type solver to be appended.
+     */
+    public void add(TypeSolver typeSolver) {
+        add(typeSolver, true);
     }
 
     @Override
     public SymbolReference<ResolvedReferenceTypeDeclaration> tryToSolveType(String name) {
+        return solveWithCache(name, ts -> ts.tryToSolveType(name));
+    }
+
+    /**
+     * Create the key that should be used for module cache lookups.
+     */
+    public static String createModuleTypeName(String moduleQualifiedName, String simpleTypeName) {
+        return String.format("<%s>.%s", moduleQualifiedName, simpleTypeName);
+    }
+
+    @Override
+    public SymbolReference<ResolvedReferenceTypeDeclaration> tryToSolveTypeInModule(
+            String moduleQualifiedName, String simpleTypeName) {
+        return solveWithCache(
+                createModuleTypeName(moduleQualifiedName, simpleTypeName),
+                ts -> ts.tryToSolveTypeInModule(moduleQualifiedName, simpleTypeName));
+    }
+
+    /**
+     * Applies the shared cache, solver ordering, and exception policy to a lookup operation.
+     */
+    private SymbolReference<ResolvedReferenceTypeDeclaration> solveWithCache(
+            String cacheName, Function<TypeSolver, SymbolReference<ResolvedReferenceTypeDeclaration>> lookup) {
+        Optional<SymbolReference<ResolvedReferenceTypeDeclaration>> cachedType = typeCache.get(cacheName);
+        if (cachedType.isPresent()) {
+            return cachedType.get();
+        }
+
         for (TypeSolver ts : elements) {
             try {
-                SymbolReference<ResolvedReferenceTypeDeclaration> res = ts.tryToSolveType(name);
+                SymbolReference<ResolvedReferenceTypeDeclaration> res = lookup.apply(ts);
                 if (res.isSolved()) {
+                    typeCache.put(cacheName, res);
                     return res;
                 }
             } catch (Exception e) {
@@ -119,7 +192,11 @@ public class CombinedTypeSolver implements TypeSolver {
                 }
             }
         }
-        return SymbolReference.unsolved(ResolvedReferenceTypeDeclaration.class);
+
+        // When unable to solve, cache the value with unsolved symbol
+        SymbolReference<ResolvedReferenceTypeDeclaration> unsolvedSymbol = SymbolReference.unsolved();
+        typeCache.put(cacheName, unsolvedSymbol);
+        return unsolvedSymbol;
     }
 
     @Override
@@ -127,9 +204,19 @@ public class CombinedTypeSolver implements TypeSolver {
         SymbolReference<ResolvedReferenceTypeDeclaration> res = tryToSolveType(name);
         if (res.isSolved()) {
             return res.getCorrespondingDeclaration();
-        } else {
-            throw new UnsolvedSymbolException(name);
         }
+        throw new UnsolvedSymbolException(name);
+    }
+
+    @Override
+    public ResolvedReferenceTypeDeclaration solveTypeInModule(String moduleQualifiedName, String simpleTypeName)
+            throws UnsolvedSymbolException {
+        SymbolReference<ResolvedReferenceTypeDeclaration> res =
+                tryToSolveTypeInModule(moduleQualifiedName, simpleTypeName);
+        if (res.isSolved()) {
+            return res.getCorrespondingDeclaration();
+        }
+        throw new UnsolvedSymbolException("module=" + moduleQualifiedName + " type=" + simpleTypeName);
     }
 
     /**
@@ -147,36 +234,36 @@ public class CombinedTypeSolver implements TypeSolver {
         /**
          * Ignores any exception that is {@link Class#isAssignableFrom(Class) assignable from}
          * {@link UnsupportedOperationException}.
-         * 
+         *
          * @see #getTypeBasedWhitelist(Class...)
          */
-        public static final Predicate<Exception> IGNORE_UNSUPPORTED_OPERATION = getTypeBasedWhitelist(
-                UnsupportedOperationException.class);
+        public static final Predicate<Exception> IGNORE_UNSUPPORTED_OPERATION =
+                getTypeBasedWhitelist(UnsupportedOperationException.class);
 
         /**
          * Ignores any exception that is {@link Class#isAssignableFrom(Class) assignable from}
          * {@link UnsolvedSymbolException}.
-         * 
+         *
          * @see #getTypeBasedWhitelist(Class...)
          */
-        public static final Predicate<Exception> IGNORE_UNSOLVED_SYMBOL = getTypeBasedWhitelist(
-                UnsolvedSymbolException.class);
+        public static final Predicate<Exception> IGNORE_UNSOLVED_SYMBOL =
+                getTypeBasedWhitelist(UnsolvedSymbolException.class);
 
         /**
          * Ignores any exception that is {@link Class#isAssignableFrom(Class) assignable from} either
          * {@link UnsolvedSymbolException} or {@link UnsupportedOperationException}.
-         * 
+         *
          * @see #IGNORE_UNSOLVED_SYMBOL
          * @see #IGNORE_UNSUPPORTED_OPERATION
          * @see #getTypeBasedWhitelist(Class...)
          */
-        public static final Predicate<Exception> IGNORE_UNSUPPORTED_AND_UNSOLVED = getTypeBasedWhitelist(
-                UnsupportedOperationException.class, UnsolvedSymbolException.class);
+        public static final Predicate<Exception> IGNORE_UNSUPPORTED_AND_UNSOLVED =
+                getTypeBasedWhitelist(UnsupportedOperationException.class, UnsolvedSymbolException.class);
 
         /**
          * @see CombinedTypeSolver#setExceptionHandler(Predicate)
          * @see #getTypeBasedWhitelist(Class...)
-         * 
+         *
          * @return A filter that ignores an exception if <b>none</b> of the listed classes are
          *         {@link Class#isAssignableFrom(Class) assignable from}
          *         the thrown exception class.
@@ -195,7 +282,7 @@ public class CombinedTypeSolver implements TypeSolver {
         /**
          * @see CombinedTypeSolver#setExceptionHandler(Predicate)
          * @see #getTypeBasedBlacklist(Class...)
-         * 
+         *
          * @return A filter that ignores an exception if <b>any</b> of the listed classes are
          *         {@link Class#isAssignableFrom(Class) assignable from}
          *         the thrown exception class.

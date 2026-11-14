@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2007-2010 Júlio Vilmar Gesser.
- * Copyright (C) 2011, 2013-2019 The JavaParser Team.
+ * Copyright (C) 2011, 2013-2026 The JavaParser Team.
  *
  * This file is part of JavaParser.
  *
@@ -21,6 +21,12 @@
 
 package com.github.javaparser.ast.visitor;
 
+import static com.github.javaparser.utils.TestUtils.assertEqualsStringIgnoringEol;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+
+import com.github.javaparser.JavaParserAdapter;
+import com.github.javaparser.StaticJavaParser;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.Node;
 import com.github.javaparser.ast.expr.ArrayInitializerExpr;
@@ -29,16 +35,13 @@ import com.github.javaparser.ast.expr.IntegerLiteralExpr;
 import com.github.javaparser.ast.expr.SimpleName;
 import org.junit.jupiter.api.Test;
 
-import static com.github.javaparser.StaticJavaParser.parse;
-import static com.github.javaparser.StaticJavaParser.parseExpression;
-import static com.github.javaparser.utils.TestUtils.assertEqualsStringIgnoringEol;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-
 class TreeVisitorTest {
+
+    private final JavaParserAdapter parser = StaticJavaParser.newParserAdapter();
+
     @Test
     void isValidBreadthFirstTraversal() {
-        Expression expression = parseExpression("(2+3)+(4+5)");
+        Expression expression = parser.parseExpression("(2+3)+(4+5)");
 
         StringBuilder result = new StringBuilder();
 
@@ -55,21 +58,22 @@ class TreeVisitorTest {
 
     @Test
     void issue743ConcurrentModificationProblem() {
-        Expression expression = parseExpression("new int[]{1,2,3,4}");
+        Expression expression = parser.parseExpression("new int[]{1,2,3,4}");
 
         StringBuilder result = new StringBuilder();
         TreeVisitor visitor = new TreeVisitor() {
             @Override
             public void process(Node node) {
                 if (node instanceof IntegerLiteralExpr) {
-                    node.getParentNode().ifPresent(
-                            parent -> ((ArrayInitializerExpr) parent).getValues().add(new IntegerLiteralExpr("1")));
+                    node.getParentNode()
+                            .ifPresent(parent ->
+                                    ((ArrayInitializerExpr) parent).getValues().add(new IntegerLiteralExpr("1")));
                 }
                 result.append("<").append(node).append("> ");
             }
         };
         visitor.visitPreOrder(expression);
-        System.out.println(result);
+        //        System.out.println(result);
     }
 
     @Test
@@ -80,7 +84,7 @@ class TreeVisitorTest {
             public void process(Node node) {
                 result.append("<").append(node).append("> ");
             }
-        }.visitPreOrder(parseExpression("(2+3)+(4+5)"));
+        }.visitPreOrder(parser.parseExpression("(2+3)+(4+5)"));
         assertEquals("<(2 + 3) + (4 + 5)> <(2 + 3)> <2 + 3> <2> <3> <(4 + 5)> <4 + 5> <4> <5> ", result.toString());
     }
 
@@ -92,7 +96,7 @@ class TreeVisitorTest {
             public void process(Node node) {
                 result.append("<").append(node).append("> ");
             }
-        }.visitPostOrder(parseExpression("(2+3)+(4+5)"));
+        }.visitPostOrder(parser.parseExpression("(2+3)+(4+5)"));
         assertEquals("<2> <3> <2 + 3> <(2 + 3)> <4> <5> <4 + 5> <(4 + 5)> <(2 + 3) + (4 + 5)> ", result.toString());
     }
 
@@ -102,11 +106,12 @@ class TreeVisitorTest {
             @Override
             public void process(Node node) {
                 if (node instanceof IntegerLiteralExpr) {
-                    node.getParentNode().ifPresent(
-                            parent -> ((ArrayInitializerExpr) parent).getValues().add(new IntegerLiteralExpr("1")));
+                    node.getParentNode()
+                            .ifPresent(parent ->
+                                    ((ArrayInitializerExpr) parent).getValues().add(new IntegerLiteralExpr("1")));
                 }
             }
-        }.visitPreOrder(parseExpression("new int[]{1,2,3,4}"));
+        }.visitPreOrder(parser.parseExpression("new int[]{1,2,3,4}"));
     }
 
     @Test
@@ -115,35 +120,38 @@ class TreeVisitorTest {
             @Override
             public void process(Node node) {
                 if (node instanceof IntegerLiteralExpr) {
-                    node.getParentNode().ifPresent(
-                            parent -> ((ArrayInitializerExpr) parent).getValues().add(new IntegerLiteralExpr("1")));
+                    node.getParentNode()
+                            .ifPresent(parent ->
+                                    ((ArrayInitializerExpr) parent).getValues().add(new IntegerLiteralExpr("1")));
                 }
             }
-        }.visitPostOrder(parseExpression("new int[]{1,2,3,4}"));
+        }.visitPostOrder(parser.parseExpression("new int[]{1,2,3,4}"));
     }
 
     @Test
     void parents() {
-        CompilationUnit cu = parse("class X{int x=1;}");
-        SimpleName x = cu.getClassByName("X").get().getMember(0).asFieldDeclaration().getVariable(0).getName();
+        CompilationUnit cu = parser.parse("class X{int x=1;}");
+        SimpleName x = cu.getClassByName("X")
+                .get()
+                .getMember(0)
+                .asFieldDeclaration()
+                .getVariable(0)
+                .getName();
 
         Node.ParentsVisitor visitor = new Node.ParentsVisitor(x);
         assertEquals("x = 1", visitor.next().toString());
         assertEquals("int x = 1;", visitor.next().toString());
-        assertEqualsStringIgnoringEol("class X {\n" +
-                "\n" +
-                "    int x = 1;\n" +
-                "}", visitor.next().toString());
-        assertEqualsStringIgnoringEol("class X {\n" +
-                "\n" +
-                "    int x = 1;\n" +
-                "}\n", visitor.next().toString());
+        assertEqualsStringIgnoringEol(
+                "class X {\n" + "\n" + "    int x = 1;\n" + "}", visitor.next().toString());
+        assertEqualsStringIgnoringEol(
+                "class X {\n" + "\n" + "    int x = 1;\n" + "}\n",
+                visitor.next().toString());
         assertFalse(visitor.hasNext());
     }
 
     @Test
     void isValidDirectChildrenTraversal() {
-        Expression expression = parseExpression("(2+3)+(4+5)");
+        Expression expression = parser.parseExpression("(2+3)+(4+5)");
 
         StringBuilder result = new StringBuilder();
 

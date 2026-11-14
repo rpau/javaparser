@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2015-2016 Federico Tomassetti
- * Copyright (C) 2017-2020 The JavaParser Team.
+ * Copyright (C) 2017-2026 The JavaParser Team.
  *
  * This file is part of JavaParser.
  *
@@ -21,35 +21,27 @@
 
 package com.github.javaparser.symbolsolver.javaparsermodel.contexts;
 
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Optional;
-
 import com.github.javaparser.ast.Node;
-import com.github.javaparser.ast.Node.TreeTraversal;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
-import com.github.javaparser.ast.body.TypeDeclaration;
-import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.TypeParameter;
-import com.github.javaparser.resolution.declarations.ResolvedConstructorDeclaration;
-import com.github.javaparser.resolution.declarations.ResolvedFieldDeclaration;
-import com.github.javaparser.resolution.declarations.ResolvedMethodDeclaration;
-import com.github.javaparser.resolution.declarations.ResolvedReferenceTypeDeclaration;
-import com.github.javaparser.resolution.declarations.ResolvedTypeDeclaration;
-import com.github.javaparser.resolution.declarations.ResolvedValueDeclaration;
+import com.github.javaparser.resolution.TypeSolver;
+import com.github.javaparser.resolution.declarations.*;
+import com.github.javaparser.resolution.model.SymbolReference;
+import com.github.javaparser.resolution.model.Value;
 import com.github.javaparser.resolution.types.ResolvedType;
 import com.github.javaparser.resolution.types.ResolvedTypeVariable;
 import com.github.javaparser.symbolsolver.javaparsermodel.JavaParserFacade;
-import com.github.javaparser.symbolsolver.javaparsermodel.JavaParserFactory;
 import com.github.javaparser.symbolsolver.javaparsermodel.declarations.JavaParserTypeParameter;
-import com.github.javaparser.symbolsolver.model.resolution.SymbolReference;
-import com.github.javaparser.symbolsolver.model.resolution.TypeSolver;
-import com.github.javaparser.symbolsolver.model.resolution.Value;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Optional;
 
 /**
  * @author Federico Tomassetti
  */
 public class ClassOrInterfaceDeclarationContext extends AbstractJavaParserContext<ClassOrInterfaceDeclaration> {
+
+    public static final String JAVA_BASE_MODULE_NAME = "java.base";
 
     private JavaParserTypeDeclarationAdapter javaParserTypeDeclarationAdapter;
 
@@ -59,8 +51,8 @@ public class ClassOrInterfaceDeclarationContext extends AbstractJavaParserContex
 
     public ClassOrInterfaceDeclarationContext(ClassOrInterfaceDeclaration wrappedNode, TypeSolver typeSolver) {
         super(wrappedNode, typeSolver);
-        this.javaParserTypeDeclarationAdapter = new JavaParserTypeDeclarationAdapter(wrappedNode, typeSolver,
-                getDeclaration(), this);
+        this.javaParserTypeDeclarationAdapter =
+                new JavaParserTypeDeclarationAdapter(wrappedNode, typeSolver, getDeclaration(), this);
     }
 
     ///
@@ -106,45 +98,13 @@ public class ClassOrInterfaceDeclarationContext extends AbstractJavaParserContex
     }
 
     @Override
-    public SymbolReference<ResolvedTypeDeclaration> solveType(String name) {
-        if (wrappedNode.getName().getId().equals(name)) {
-            return SymbolReference.solved(JavaParserFacade.get(typeSolver).getTypeDeclaration(wrappedNode));
-        }
-        
-        // search in implemented type
-        for (ClassOrInterfaceType implementedType : wrappedNode.getImplementedTypes()) {
-            if (implementedType.getName().getId().equals(name)) {
-                return JavaParserFactory.getContext(wrappedNode.getParentNode().orElse(null), typeSolver)
-                    .solveType(implementedType.getNameWithScope());
-            }
-        }
-
-        // otherwise search iin extended type
-        for (ClassOrInterfaceType extendedType : wrappedNode.getExtendedTypes()) {
-            if (extendedType.getName().getId().equals(name)) {
-                return JavaParserFactory.getContext(wrappedNode.getParentNode().orElse(null), typeSolver)
-                    .solveType(extendedType.getNameWithScope());
-            }
-        }
-        
-        // otherwise search for local type
-        List<TypeDeclaration> localTypes = wrappedNode.findAll(TypeDeclaration.class, TreeTraversal.BREADTHFIRST);
-        for (TypeDeclaration<?> localType : localTypes) {
-            if (localType.getName().getId().equals(name)) {
-                return SymbolReference.solved(JavaParserFacade.get(typeSolver)
-                        .getTypeDeclaration(localType));
-            } else if (name.startsWith(String.format("%s.", localType.getName()))) {
-                return JavaParserFactory.getContext(localType, typeSolver)
-                        .solveType(name.substring(localType.getName().getId().length() + 1));
-            }
-        }
-
-        // otherwise delegate to javaParserTypeDeclarationAdapter
-        return javaParserTypeDeclarationAdapter.solveType(name);
+    public SymbolReference<ResolvedTypeDeclaration> solveType(String name, List<ResolvedType> typeArguments) {
+        return javaParserTypeDeclarationAdapter.solveType(name, typeArguments);
     }
 
     @Override
-    public SymbolReference<ResolvedMethodDeclaration> solveMethod(String name, List<ResolvedType> argumentsTypes, boolean staticOnly) {
+    public SymbolReference<ResolvedMethodDeclaration> solveMethod(
+            String name, List<ResolvedType> argumentsTypes, boolean staticOnly) {
         return javaParserTypeDeclarationAdapter.solveMethod(name, argumentsTypes, staticOnly);
     }
 
@@ -156,8 +116,12 @@ public class ClassOrInterfaceDeclarationContext extends AbstractJavaParserContex
     public List<ResolvedFieldDeclaration> fieldsExposedToChild(Node child) {
         List<ResolvedFieldDeclaration> fields = new LinkedList<>();
         fields.addAll(this.wrappedNode.resolve().getDeclaredFields());
-        this.wrappedNode.getExtendedTypes().forEach(i -> fields.addAll(i.resolve().getAllFieldsVisibleToInheritors()));
-        this.wrappedNode.getImplementedTypes().forEach(i -> fields.addAll(i.resolve().getAllFieldsVisibleToInheritors()));
+        this.wrappedNode
+                .getExtendedTypes()
+                .forEach(i -> fields.addAll(i.resolve().asReferenceType().getAllFieldsVisibleToInheritors()));
+        this.wrappedNode
+                .getImplementedTypes()
+                .forEach(i -> fields.addAll(i.resolve().asReferenceType().getAllFieldsVisibleToInheritors()));
         return fields;
     }
 

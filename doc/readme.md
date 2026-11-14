@@ -8,7 +8,7 @@
 
 [![Maven Central](https://img.shields.io/maven-central/v/com.github.javaparser/javaparser-core.svg)](http://search.maven.org/#search%7Cgav%7C1%7Cg%3A%22com.github.javaparser%22%20AND%20a%3A%22javaparser-core%22)
 [![Build Status](https://travis-ci.org/javaparser/javaparser.svg?branch=master)](https://travis-ci.org/javaparser/javaparser)
-[![Coverage Status](https://coveralls.io/repos/javaparser/javaparser/badge.svg?branch=master&service=github)](https://coveralls.io/github/javaparser/javaparser?branch=master)
+[![Coverage Status](https://codecov.io/gh/javaparser/javaparser/branch/master/graphs/badge.svg?branch=master)](https://app.codecov.io/gh/javaparser/javaparser?branch=master)
 [![Join the chat at https://gitter.im/javaparser/javaparser](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/javaparser/javaparser?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 [![License LGPL-3/Apache-2.0](https://img.shields.io/badge/license-LGPL--3%2FApache--2.0-blue.svg)](LICENSE)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.2667378.svg)](https://doi.org/10.5281/zenodo.2667378)
@@ -90,16 +90,25 @@ implementation 'com.github.javaparser:javaparser-core-serialization:${project.ve
 
 ## How To Compile Sources
 
-If you checked out the project from GitHub you can build the project with maven using:
+If you checked out the project's source code from GitHub, you can build the project with maven using:
+```
+mvnw clean install
+```
+
+If you want to generate the packaged jar files from the source files, you run the following maven command:
+```
+mvnw package
+```
+
+**NOTE** the jar files for the two modules can be found in:
+- `javaparser/javaparser-core/target/javaparser-core-\<version\>.jar`
+- `javaparser-symbol-solver-core/target/javaparser-symbol-solver-core-\<version\>.jar`
+
+If you checkout the sources and want to view the project in an IDE, it is best to first generate some of the source files;
+otherwise you will get many compilation complaints in the IDE. (`mvnw clean install` already does this for you.)
 
 ```
-mvn clean install
-```
-
-If you checkout the sources and want to view the project in an IDE, it is best to first generate some of the source files; otherwise you will get many compilation complaints in the IDE. (mvn clean install already does this for you.)
-
-```
-mvn javacc:javacc
+mvnw javacc:javacc
 ```
 
 If you modify the code of the AST nodes, specifically if you add or remove fields or node classes,

@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2007-2010 Júlio Vilmar Gesser.
- * Copyright (C) 2011, 2013-2019 The JavaParser Team.
+ * Copyright (C) 2011, 2013-2026 The JavaParser Team.
  *
  * This file is part of JavaParser.
  *
@@ -21,32 +21,271 @@
 
 package com.github.javaparser.ast.validator;
 
-import com.github.javaparser.JavaParser;
-import com.github.javaparser.ParseResult;
-import com.github.javaparser.ParserConfiguration;
-import com.github.javaparser.ast.CompilationUnit;
-import com.github.javaparser.ast.stmt.Statement;
-import com.github.javaparser.utils.TestUtils;
-import org.junit.jupiter.api.Nested;
-import org.junit.jupiter.api.Test;
-
 import static com.github.javaparser.ParseStart.COMPILATION_UNIT;
 import static com.github.javaparser.ParseStart.STATEMENT;
 import static com.github.javaparser.ParserConfiguration.LanguageLevel.JAVA_16;
 import static com.github.javaparser.Providers.provider;
+import static com.github.javaparser.ast.validator.Java1_1ValidatorTest.allModifiers;
+import static com.github.javaparser.utils.TestUtils.assertNoProblems;
+import static com.github.javaparser.utils.TestUtils.assertProblems;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import com.github.javaparser.JavaParser;
+import com.github.javaparser.ParseResult;
+import com.github.javaparser.ParserConfiguration;
+import com.github.javaparser.ast.CompilationUnit;
+import com.github.javaparser.ast.body.EnumDeclaration;
+import com.github.javaparser.ast.comments.LineComment;
+import com.github.javaparser.ast.stmt.LocalEnumDeclarationStmt;
+import com.github.javaparser.ast.stmt.Statement;
+import com.github.javaparser.metamodel.JavaParserMetaModel;
+import java.util.concurrent.atomic.AtomicBoolean;
+import org.junit.jupiter.api.Nested;
+import org.junit.jupiter.api.Test;
 
 class Java16ValidatorTest {
 
     private final JavaParser javaParser = new JavaParser(new ParserConfiguration().setLanguageLevel(JAVA_16));
+
+    @Test
+    void localInterface() {
+        ParseResult<CompilationUnit> result =
+                javaParser.parse(COMPILATION_UNIT, provider("class X{ void x() {" + "interface I{}}}"));
+        assertNoProblems(result);
+    }
+
+    @Test
+    void localEnum() {
+        ParseResult<CompilationUnit> result =
+                javaParser.parse(COMPILATION_UNIT, provider("class X{ void x() {enum E{A,B}}}"));
+        assertNoProblems(result);
+
+        LocalEnumDeclarationStmt localEnumStmt = result.getResult()
+                .get()
+                .findFirst(LocalEnumDeclarationStmt.class)
+                .get();
+        EnumDeclaration enumDeclaration = localEnumStmt.getEnumDeclaration();
+        assertEquals("E", enumDeclaration.getNameAsString());
+        assertEquals("A", enumDeclaration.getEntry(0).getNameAsString());
+        assertEquals("B", enumDeclaration.getEntry(1).getNameAsString());
+        assertSame(localEnumStmt, enumDeclaration.getParentNode().get());
+    }
+
+    @Test
+    void localEnumDeclarationIsLocalAndHasNoFullyQualifiedName() {
+        EnumDeclaration enumDeclaration = parseLocalEnum().getEnumDeclaration();
+
+        assertTrue(enumDeclaration.isLocalEnumDeclaration());
+        assertFalse(enumDeclaration.getFullyQualifiedName().isPresent());
+    }
+
+    @Test
+    void localEnumMetaModel() {
+        assertSame(
+                JavaParserMetaModel.localEnumDeclarationStmtMetaModel,
+                parseLocalEnum().getMetaModel());
+    }
+
+    @Test
+    void localEnumTypeCasters() {
+        LocalEnumDeclarationStmt localEnumStmt = parseLocalEnum();
+
+        assertTrue(localEnumStmt.isLocalEnumDeclarationStmt());
+        assertSame(localEnumStmt, localEnumStmt.asLocalEnumDeclarationStmt());
+        assertSame(localEnumStmt, localEnumStmt.toLocalEnumDeclarationStmt().get());
+    }
+
+    @Test
+    void ifLocalEnumDeclarationStmtCallsConsumer() {
+        AtomicBoolean consumerCalled = new AtomicBoolean(false);
+
+        parseLocalEnum().ifLocalEnumDeclarationStmt(s -> consumerCalled.set(true));
+
+        assertTrue(consumerCalled.get());
+    }
+
+    @Test
+    void setEnumDeclarationToTheSameNodeIsNoOp() {
+        LocalEnumDeclarationStmt localEnumStmt = parseLocalEnum();
+        EnumDeclaration enumDeclaration = localEnumStmt.getEnumDeclaration();
+
+        localEnumStmt.setEnumDeclaration(enumDeclaration);
+
+        assertSame(enumDeclaration, localEnumStmt.getEnumDeclaration());
+    }
+
+    @Test
+    void cloneIsEqualToOriginal() {
+        LocalEnumDeclarationStmt localEnumStmt = parseLocalEnum();
+
+        assertEquals(localEnumStmt, localEnumStmt.clone());
+    }
+
+    @Test
+    void notEqualToStatementWithDifferentEnumDeclaration() {
+        LocalEnumDeclarationStmt differentEnumDeclaration =
+                new LocalEnumDeclarationStmt(new EnumDeclaration().setName("Other"));
+
+        assertNotEquals(parseLocalEnum(), differentEnumDeclaration);
+    }
+
+    @Test
+    void notEqualToStatementWithDifferentComment() {
+        LocalEnumDeclarationStmt localEnumStmt = parseLocalEnum();
+        LocalEnumDeclarationStmt differentComment = localEnumStmt.clone();
+        differentComment.setComment(new LineComment("different"));
+
+        assertNotEquals(localEnumStmt, differentComment);
+    }
+
+    @Test
+    void reprintedLocalEnumParsesToEqualStatement() {
+        LocalEnumDeclarationStmt localEnumStmt = parseLocalEnum();
+
+        ParseResult<Statement> reprinted = javaParser.parse(STATEMENT, provider(localEnumStmt.toString()));
+
+        assertNoProblems(reprinted);
+        assertEquals(localEnumStmt, reprinted.getResult().get());
+    }
+
+    @Test
+    void replaceEnumDeclaration() {
+        LocalEnumDeclarationStmt localEnumStmt = parseLocalEnum();
+        EnumDeclaration replacement = new EnumDeclaration().setName("F");
+
+        assertTrue(localEnumStmt.replace(localEnumStmt.getEnumDeclaration(), replacement));
+
+        assertSame(replacement, localEnumStmt.getEnumDeclaration());
+    }
+
+    @Test
+    void replaceNullIsRejected() {
+        LocalEnumDeclarationStmt localEnumStmt = parseLocalEnum();
+
+        assertFalse(localEnumStmt.replace(null, new EnumDeclaration().setName("F")));
+    }
+
+    @Test
+    void replaceForeignNodeIsRejected() {
+        LocalEnumDeclarationStmt localEnumStmt = parseLocalEnum();
+
+        assertFalse(localEnumStmt.replace(new EnumDeclaration(), new EnumDeclaration().setName("F")));
+    }
+
+    @Test
+    void allFieldsConstructorKeepsEnumDeclaration() {
+        LocalEnumDeclarationStmt localEnumStmt = new LocalEnumDeclarationStmt(new EnumDeclaration().setName("F"));
+
+        assertEquals("F", localEnumStmt.getEnumDeclaration().getNameAsString());
+    }
+
+    @Test
+    void localEnumWithImplements() {
+        ParseResult<CompilationUnit> result = javaParser.parse(
+                COMPILATION_UNIT, provider("class X{ void x() {enum E implements Comparable<E> {A,B}}}"));
+        assertNoProblems(result);
+
+        LocalEnumDeclarationStmt localEnumStmt = result.getResult()
+                .get()
+                .findFirst(LocalEnumDeclarationStmt.class)
+                .get();
+        assertEquals(
+                "Comparable",
+                localEnumStmt.getEnumDeclaration().getImplementedTypes(0).getNameAsString());
+    }
+
+    @Test
+    void nonLocalEnumStatementRejectsLocalEnumCasters() {
+        ParseResult<Statement> result = javaParser.parse(STATEMENT, provider(";"));
+        assertNoProblems(result);
+        Statement emptyStmt = result.getResult().get();
+
+        assertFalse(emptyStmt.isLocalEnumDeclarationStmt());
+        assertThrows(IllegalStateException.class, emptyStmt::asLocalEnumDeclarationStmt);
+        assertFalse(emptyStmt.toLocalEnumDeclarationStmt().isPresent());
+
+        AtomicBoolean consumerCalled = new AtomicBoolean(false);
+        emptyStmt.ifLocalEnumDeclarationStmt(s -> consumerCalled.set(true));
+        assertFalse(consumerCalled.get());
+    }
+
+    /**
+     * A statement beginning with `enum` used as an identifier must still stay parsable, and must
+     * yield the clean {@code ReservedKeywordValidator} message instead of a raw JavaCC parse
+     * error. The local-enum-declaration lookahead in BlockStatement() must not greedily commit
+     * these to EnumDeclaration().
+     */
+    @Test
+    void enumUsedAsIdentifierYieldsCleanMessageInsteadOfParseError() {
+        assertProblems(
+                javaParser.parse(STATEMENT, provider("enum = 3;")),
+                "(line 1,col 1) 'enum' cannot be used as an identifier as it is a keyword.");
+        assertProblems(
+                javaParser.parse(STATEMENT, provider("enum.foo();")),
+                "(line 1,col 1) 'enum' cannot be used as an identifier as it is a keyword.");
+        assertProblems(
+                javaParser.parse(STATEMENT, provider("enum x = null;")),
+                "(line 1,col 1) 'enum' cannot be used as an identifier as it is a keyword.");
+        assertProblems(
+                javaParser.parse(STATEMENT, provider("enum[0] = 1;")),
+                "(line 1,col 1) 'enum' cannot be used as an identifier as it is a keyword.");
+        assertProblems(
+                javaParser.parse(STATEMENT, provider("enum++;")),
+                "(line 1,col 1) 'enum' cannot be used as an identifier as it is a keyword.");
+    }
+
+    @Test
+    void localEnumModifiers() {
+        ParseResult<CompilationUnit> result =
+                javaParser.parse(COMPILATION_UNIT, provider("class X{ void x() {" + allModifiers + "enum E{A,B}}}"));
+        assertProblems(
+                result,
+                "(line 1,col 20) Can have only one of 'public', 'protected', 'private'.",
+                "(line 1,col 20) Can have only one of 'final', 'abstract'.",
+                "(line 1,col 20) Can have only one of 'native', 'strictfp'.",
+                "(line 1,col 20) 'public' is not allowed here.",
+                "(line 1,col 20) 'protected' is not allowed here.",
+                "(line 1,col 20) 'private' is not allowed here.",
+                "(line 1,col 20) 'abstract' is not allowed here.",
+                "(line 1,col 20) 'static' is not allowed here.",
+                "(line 1,col 20) 'final' is not allowed here.",
+                "(line 1,col 20) 'transient' is not allowed here.",
+                "(line 1,col 20) 'volatile' is not allowed here.",
+                "(line 1,col 20) 'synchronized' is not allowed here.",
+                "(line 1,col 20) 'native' is not allowed here.",
+                "(line 1,col 20) 'transitive' is not allowed here.",
+                "(line 1,col 20) 'default' is not allowed here.");
+    }
 
     @Nested
     class Yield {
         @Test
         void yieldAllowed() {
             ParseResult<Statement> result = javaParser.parse(STATEMENT, provider("switch(x){case 3: yield 6;}"));
-            TestUtils.assertNoProblems(result);
+            assertNoProblems(result);
+        }
+    }
+
+    @Nested
+    class PatternMatching {
+        @Test
+        void patternMatchingAllowed() {
+            ParseResult<Statement> result = javaParser.parse(STATEMENT, provider("if (a instanceof String s) {}"));
+            assertNoProblems(result);
         }
 
+        @Test
+        void recordPatternsForbidden() {
+            ParseResult<Statement> result = javaParser.parse(STATEMENT, provider("if (a instanceof Box(String s)) {}"));
+            assertProblems(
+                    result,
+                    "(line 1,col 18) Record patterns are not supported. Pay attention that this feature is supported starting from 'JAVA_21' language level. If you need that feature the language level must be configured in the configuration before parsing the source files.");
+        }
     }
 
     /**
@@ -57,22 +296,51 @@ class Java16ValidatorTest {
     class Record {
 
         @Nested
-        class RecordAsIdentifierForbidden {
+        class RecordAsTypeIdentifierForbidden {
             @Test
-            void recordUsedAsClassName() {
+            void recordUsedAsClassIdentifier() {
                 String s = "public class record {}";
                 ParseResult<CompilationUnit> result = javaParser.parse(COMPILATION_UNIT, provider(s));
-                TestUtils.assertProblems(result, "(line 1,col 14) 'record' cannot be used as an identifier as it is a keyword.");
+                assertProblems(
+                        result,
+                        "(line 1,col 14) 'record' is a restricted identifier and cannot be used for type declarations");
             }
 
             @Test
-            void recordUsedAsFieldName() {
-                String s = "class X { int record; }";
+            void recordUsedAsEnumIdentifier() {
+                String s = "public enum record {}";
                 ParseResult<CompilationUnit> result = javaParser.parse(COMPILATION_UNIT, provider(s));
-                TestUtils.assertProblems(result, "(line 1,col 15) 'record' cannot be used as an identifier as it is a keyword.");
+                assertProblems(
+                        result,
+                        "(line 1,col 13) 'record' is a restricted identifier and cannot be used for type declarations");
+            }
+
+            @Test
+            void recordUsedAsRecordIdentifier() {
+                String s = "public record record() {}";
+                ParseResult<CompilationUnit> result = javaParser.parse(COMPILATION_UNIT, provider(s));
+                assertProblems(
+                        result,
+                        "(line 1,col 15) 'record' is a restricted identifier and cannot be used for type declarations");
             }
         }
 
+        @Nested
+        class RecordUsedAsIdentifierAllowedAsFieldDeclarations {
+            @Test
+            void recordUsedAsFieldIdentifierInClass() {
+                String s = "class X { int record; }";
+                ParseResult<CompilationUnit> result = javaParser.parse(COMPILATION_UNIT, provider(s));
+                assertNoProblems(result);
+            }
+
+            @Test
+            void recordUsedAsFieldIdentifierInInterface() {
+                String s = "interface X { int record; }";
+                ParseResult<CompilationUnit> result = javaParser.parse(COMPILATION_UNIT, provider(s));
+                assertNoProblems(result);
+            }
+        }
 
         @Nested
         class RecordDeclarationPermitted {
@@ -80,8 +348,18 @@ class Java16ValidatorTest {
             void recordDeclaration() {
                 String s = "record X() { }";
                 ParseResult<CompilationUnit> result = javaParser.parse(COMPILATION_UNIT, provider(s));
-                TestUtils.assertNoProblems(result);
+                assertNoProblems(result);
             }
         }
+    }
+
+    private LocalEnumDeclarationStmt parseLocalEnum() {
+        ParseResult<CompilationUnit> result =
+                javaParser.parse(COMPILATION_UNIT, provider("class X{ void x() {enum E{A,B}}}"));
+        assertNoProblems(result);
+        return result.getResult()
+                .get()
+                .findFirst(LocalEnumDeclarationStmt.class)
+                .get();
     }
 }

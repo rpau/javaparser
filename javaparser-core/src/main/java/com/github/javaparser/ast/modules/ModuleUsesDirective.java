@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2007-2010 Júlio Vilmar Gesser.
- * Copyright (C) 2011, 2013-2021 The JavaParser Team.
+ * Copyright (C) 2011, 2013-2026 The JavaParser Team.
  *
  * This file is part of JavaParser.
  *
@@ -20,6 +20,8 @@
  */
 package com.github.javaparser.ast.modules;
 
+import static com.github.javaparser.utils.Utils.assertNotNull;
+
 import com.github.javaparser.TokenRange;
 import com.github.javaparser.ast.AllFieldsConstructor;
 import com.github.javaparser.ast.Generated;
@@ -34,7 +36,6 @@ import com.github.javaparser.metamodel.JavaParserMetaModel;
 import com.github.javaparser.metamodel.ModuleUsesDirectiveMetaModel;
 import java.util.Optional;
 import java.util.function.Consumer;
-import static com.github.javaparser.utils.Utils.assertNotNull;
 
 /**
  * A uses directive in module-info.java. {@code uses V.W;}
@@ -74,14 +75,6 @@ public class ModuleUsesDirective extends ModuleDirective implements NodeWithName
         v.visit(this, arg);
     }
 
-    @Override
-    @Generated("com.github.javaparser.generator.core.node.RemoveMethodGenerator")
-    public boolean remove(Node node) {
-        if (node == null)
-            return false;
-        return super.remove(node);
-    }
-
     @Generated("com.github.javaparser.generator.core.node.PropertyGenerator")
     public ModuleUsesDirective setType(final Name name) {
         assertNotNull(name);
@@ -89,8 +82,7 @@ public class ModuleUsesDirective extends ModuleDirective implements NodeWithName
             return (ModuleUsesDirective) this;
         }
         notifyPropertyChange(ObservableProperty.TYPE, this.name, name);
-        if (this.name != null)
-            this.name.setParentNode(null);
+        if (this.name != null) this.name.setParentNode(null);
         this.name = name;
         setAsParentNodeOf(name);
         return this;
@@ -137,8 +129,7 @@ public class ModuleUsesDirective extends ModuleDirective implements NodeWithName
             return this;
         }
         notifyPropertyChange(ObservableProperty.NAME, this.name, name);
-        if (this.name != null)
-            this.name.setParentNode(null);
+        if (this.name != null) this.name.setParentNode(null);
         this.name = name;
         setAsParentNodeOf(name);
         return this;
@@ -147,8 +138,9 @@ public class ModuleUsesDirective extends ModuleDirective implements NodeWithName
     @Override
     @Generated("com.github.javaparser.generator.core.node.ReplaceMethodGenerator")
     public boolean replace(Node node, Node replacementNode) {
-        if (node == null)
+        if (node == null) {
             return false;
+        }
         if (node == name) {
             setName((Name) replacementNode);
             return true;

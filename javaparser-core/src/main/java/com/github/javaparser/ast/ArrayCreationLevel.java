@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2007-2010 Júlio Vilmar Gesser.
- * Copyright (C) 2011, 2013-2021 The JavaParser Team.
+ * Copyright (C) 2011, 2013-2026 The JavaParser Team.
  *
  * This file is part of JavaParser.
  *
@@ -20,6 +20,8 @@
  */
 package com.github.javaparser.ast;
 
+import static com.github.javaparser.utils.Utils.assertNotNull;
+
 import com.github.javaparser.TokenRange;
 import com.github.javaparser.ast.expr.AnnotationExpr;
 import com.github.javaparser.ast.expr.Expression;
@@ -33,7 +35,6 @@ import com.github.javaparser.metamodel.ArrayCreationLevelMetaModel;
 import com.github.javaparser.metamodel.JavaParserMetaModel;
 import com.github.javaparser.metamodel.OptionalProperty;
 import java.util.Optional;
-import static com.github.javaparser.utils.Utils.assertNotNull;
 
 /**
  * In {@code new int[1][2];} there are two ArrayCreationLevel objects,
@@ -99,8 +100,7 @@ public class ArrayCreationLevel extends Node implements NodeWithAnnotations<Arra
             return this;
         }
         notifyPropertyChange(ObservableProperty.DIMENSION, this.dimension, dimension);
-        if (this.dimension != null)
-            this.dimension.setParentNode(null);
+        if (this.dimension != null) this.dimension.setParentNode(null);
         this.dimension = dimension;
         setAsParentNodeOf(dimension);
         return this;
@@ -123,8 +123,7 @@ public class ArrayCreationLevel extends Node implements NodeWithAnnotations<Arra
             return this;
         }
         notifyPropertyChange(ObservableProperty.ANNOTATIONS, this.annotations, annotations);
-        if (this.annotations != null)
-            this.annotations.setParentNode(null);
+        if (this.annotations != null) this.annotations.setParentNode(null);
         this.annotations = annotations;
         setAsParentNodeOf(annotations);
         return this;
@@ -138,8 +137,9 @@ public class ArrayCreationLevel extends Node implements NodeWithAnnotations<Arra
     @Override
     @Generated("com.github.javaparser.generator.core.node.RemoveMethodGenerator")
     public boolean remove(Node node) {
-        if (node == null)
+        if (node == null) {
             return false;
+        }
         for (int i = 0; i < annotations.size(); i++) {
             if (annotations.get(i) == node) {
                 annotations.remove(i);
@@ -170,8 +170,9 @@ public class ArrayCreationLevel extends Node implements NodeWithAnnotations<Arra
     @Override
     @Generated("com.github.javaparser.generator.core.node.ReplaceMethodGenerator")
     public boolean replace(Node node, Node replacementNode) {
-        if (node == null)
+        if (node == null) {
             return false;
+        }
         for (int i = 0; i < annotations.size(); i++) {
             if (annotations.get(i) == node) {
                 annotations.set(i, (AnnotationExpr) replacementNode);

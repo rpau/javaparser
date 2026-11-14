@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2015-2016 Federico Tomassetti
- * Copyright (C) 2017-2020 The JavaParser Team.
+ * Copyright (C) 2017-2026 The JavaParser Team.
  *
  * This file is part of JavaParser.
  *
@@ -21,17 +21,19 @@
 
 package com.github.javaparser.symbolsolver.javassistmodel;
 
+import com.github.javaparser.resolution.TypeSolver;
 import com.github.javaparser.resolution.declarations.ResolvedMethodLikeDeclaration;
 import com.github.javaparser.resolution.declarations.ResolvedParameterDeclaration;
+import com.github.javaparser.resolution.declarations.ResolvedReferenceTypeDeclaration;
 import com.github.javaparser.resolution.declarations.ResolvedTypeParameterDeclaration;
+import com.github.javaparser.resolution.model.typesystem.ReferenceTypeImpl;
 import com.github.javaparser.resolution.types.ResolvedType;
-import com.github.javaparser.symbolsolver.model.resolution.TypeSolver;
-import javassist.CtBehavior;
-import javassist.bytecode.BadBytecode;
-import javassist.bytecode.SignatureAttribute;
-
 import java.util.*;
 import java.util.stream.Collectors;
+import javassist.CtBehavior;
+import javassist.bytecode.BadBytecode;
+import javassist.bytecode.ExceptionsAttribute;
+import javassist.bytecode.SignatureAttribute;
 
 public class JavassistMethodLikeDeclarationAdapter {
 
@@ -41,7 +43,8 @@ public class JavassistMethodLikeDeclarationAdapter {
 
     private SignatureAttribute.MethodSignature methodSignature;
 
-    public JavassistMethodLikeDeclarationAdapter(CtBehavior ctBehavior, TypeSolver typeSolver, ResolvedMethodLikeDeclaration declaration) {
+    public JavassistMethodLikeDeclarationAdapter(
+            CtBehavior ctBehavior, TypeSolver typeSolver, ResolvedMethodLikeDeclaration declaration) {
         this.ctBehavior = ctBehavior;
         this.typeSolver = typeSolver;
         this.declaration = declaration;
@@ -68,7 +71,8 @@ public class JavassistMethodLikeDeclarationAdapter {
         }
 
         Optional<String> paramName = JavassistUtils.extractParameterName(ctBehavior, i);
-        ResolvedType type = JavassistUtils.signatureTypeToType(methodSignature.getParameterTypes()[i], typeSolver, declaration);
+        ResolvedType type =
+                JavassistUtils.signatureTypeToType(methodSignature.getParameterTypes()[i], typeSolver, declaration);
         return new JavassistParameterDeclaration(type, typeSolver, variadic, paramName.orElse(null));
     }
 
@@ -82,16 +86,34 @@ public class JavassistMethodLikeDeclarationAdapter {
     }
 
     public int getNumberOfSpecifiedExceptions() {
-        return methodSignature.getExceptionTypes().length;
+        ExceptionsAttribute exceptionsAttribute = ctBehavior.getMethodInfo().getExceptionsAttribute();
+        if (exceptionsAttribute == null) {
+            return 0;
+        }
+
+        String[] exceptions = exceptionsAttribute.getExceptions();
+        return exceptions == null ? 0 : exceptions.length;
     }
 
     public ResolvedType getSpecifiedException(int index) {
-        if (index < 0 || index >= getNumberOfSpecifiedExceptions()) {
-            throw new IllegalArgumentException(String.format("No exception with index %d. Number of exceptions: %d",
-                    index, getNumberOfSpecifiedExceptions()));
+        if (index < 0) {
+            throw new IllegalArgumentException(String.format("index < 0: %d", index));
         }
 
-        return JavassistUtils.signatureTypeToType(methodSignature.getExceptionTypes()[index], typeSolver, declaration);
+        ExceptionsAttribute exceptionsAttribute = ctBehavior.getMethodInfo().getExceptionsAttribute();
+        if (exceptionsAttribute == null) {
+            throw new IllegalArgumentException(
+                    String.format("No exception with index %d. Number of exceptions: 0", index));
+        }
+
+        String[] exceptions = exceptionsAttribute.getExceptions();
+        if (exceptions == null || index >= exceptions.length) {
+            throw new IllegalArgumentException(String.format(
+                    "No exception with index %d. Number of exceptions: %d", index, getNumberOfSpecifiedExceptions()));
+        }
+
+        ResolvedReferenceTypeDeclaration typeDeclaration = typeSolver.solveType(exceptions[index]);
+        return new ReferenceTypeImpl(typeDeclaration, Collections.emptyList());
     }
 
     public ResolvedType getReturnType() {

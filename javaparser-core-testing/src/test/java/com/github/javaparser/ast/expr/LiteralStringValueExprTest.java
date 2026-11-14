@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2007-2010 Júlio Vilmar Gesser.
- * Copyright (C) 2011, 2013-2019 The JavaParser Team.
+ * Copyright (C) 2011, 2013-2026 The JavaParser Team.
  *
  * This file is part of JavaParser.
  *
@@ -20,17 +20,24 @@
  */
 package com.github.javaparser.ast.expr;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+
+import com.github.javaparser.JavaParserAdapter;
+import com.github.javaparser.StaticJavaParser;
+import com.github.javaparser.ast.observer.AstObserver;
+import com.github.javaparser.ast.observer.ObservableProperty;
+import java.math.BigInteger;
 import org.assertj.core.data.Percentage;
 import org.junit.jupiter.api.Test;
 
-import java.math.BigInteger;
-
-import static com.github.javaparser.StaticJavaParser.parseExpression;
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-
 @SuppressWarnings("OctalInteger")
 class LiteralStringValueExprTest {
+
+    private final JavaParserAdapter parser = StaticJavaParser.newParserAdapter();
 
     @Test
     void trivialLiteralsAreConverted() {
@@ -76,13 +83,13 @@ class LiteralStringValueExprTest {
 
     @Test
     void lowerAndUpperBoundIntegersAreConverted() {
-        IntegerLiteralExpr dec = parseExpression("2147483647");
-        IntegerLiteralExpr posOct = parseExpression("0177_7777_7777");
-        IntegerLiteralExpr negOct = parseExpression("0377_7777_7777");
-        IntegerLiteralExpr posHex = parseExpression("0x7fff_ffff");
-        IntegerLiteralExpr negHex = parseExpression("0xffff_ffff");
-        IntegerLiteralExpr posBin = parseExpression("0b0111_1111_1111_1111_1111_1111_1111_1111");
-        IntegerLiteralExpr negBin = parseExpression("0b1000_0000_0000_0000_0000_0000_0000_0000");
+        IntegerLiteralExpr dec = parser.parseExpression("2147483647");
+        IntegerLiteralExpr posOct = parser.parseExpression("0177_7777_7777");
+        IntegerLiteralExpr negOct = parser.parseExpression("0377_7777_7777");
+        IntegerLiteralExpr posHex = parser.parseExpression("0x7fff_ffff");
+        IntegerLiteralExpr negHex = parser.parseExpression("0xffff_ffff");
+        IntegerLiteralExpr posBin = parser.parseExpression("0b0111_1111_1111_1111_1111_1111_1111_1111");
+        IntegerLiteralExpr negBin = parser.parseExpression("0b1000_0000_0000_0000_0000_0000_0000_0000");
 
         assertThat(dec.asInt()).isEqualTo(2147483647);
         assertThat(posOct.asInt()).isEqualTo(2147483647); // 0177_7777_7777
@@ -95,13 +102,13 @@ class LiteralStringValueExprTest {
 
     @Test
     void negativeLiteralValues() {
-        UnaryExpr unaryIntExpr = parseExpression("-2147483648"); // valid, Integer.MIN_VALUE
+        UnaryExpr unaryIntExpr = parser.parseExpression("-2147483648"); // valid, Integer.MIN_VALUE
         IntegerLiteralExpr literalIntExpr = (IntegerLiteralExpr) unaryIntExpr.getExpression();
-        IntegerLiteralExpr notValidIntExpr = parseExpression("2147483648"); // not valid
+        IntegerLiteralExpr notValidIntExpr = parser.parseExpression("2147483648"); // not valid
 
-        UnaryExpr unaryLongExpr = parseExpression("-9223372036854775808L"); // valid, Long.MIN_VALUE
+        UnaryExpr unaryLongExpr = parser.parseExpression("-9223372036854775808L"); // valid, Long.MIN_VALUE
         LongLiteralExpr literalLongExpr = (LongLiteralExpr) unaryLongExpr.getExpression();
-        LongLiteralExpr notValidLongExpr = parseExpression("9223372036854775808L"); // not valid
+        LongLiteralExpr notValidLongExpr = parser.parseExpression("9223372036854775808L"); // not valid
 
         assertThat(literalIntExpr.asNumber()).isEqualTo(2147483648L);
         assertThat(literalLongExpr.asNumber()).isEqualTo(new BigInteger("9223372036854775808"));
@@ -112,35 +119,39 @@ class LiteralStringValueExprTest {
 
     @Test
     void lowerAndUpperBoundLongsAreConverted() {
-        LongLiteralExpr dec = parseExpression("9223372036854775807L");
-        LongLiteralExpr posOct = parseExpression("07_7777_7777_7777_7777_7777L");
-        LongLiteralExpr negOct = parseExpression("010_0000_0000_0000_0000_0000L");
-        LongLiteralExpr posHex = parseExpression("0x7fff_ffff_ffff_ffffL");
-        LongLiteralExpr negHex = parseExpression("0xffff_ffff_ffff_ffffL");
-        LongLiteralExpr posBin = parseExpression("0b0111_1111_1111_1111_1111_1111_1111_1111_1111_1111_1111_1111_1111_1111_1111_1111L");
-        LongLiteralExpr negBin = parseExpression("0b1000_0000_0000_0000_0000_0000_0000_0000_0000_0000_0000_0000_0000_0000_0000_0000L");
+        LongLiteralExpr dec = parser.parseExpression("9223372036854775807L");
+        LongLiteralExpr posOct = parser.parseExpression("07_7777_7777_7777_7777_7777L");
+        LongLiteralExpr negOct = parser.parseExpression("010_0000_0000_0000_0000_0000L");
+        LongLiteralExpr posHex = parser.parseExpression("0x7fff_ffff_ffff_ffffL");
+        LongLiteralExpr negHex = parser.parseExpression("0xffff_ffff_ffff_ffffL");
+        LongLiteralExpr posBin = parser.parseExpression(
+                "0b0111_1111_1111_1111_1111_1111_1111_1111_1111_1111_1111_1111_1111_1111_1111_1111L");
+        LongLiteralExpr negBin = parser.parseExpression(
+                "0b1000_0000_0000_0000_0000_0000_0000_0000_0000_0000_0000_0000_0000_0000_0000_0000L");
 
         assertThat(dec.asLong()).isEqualTo(9223372036854775807L);
         assertThat(posOct.asLong()).isEqualTo(9223372036854775807L); // 07_7777_7777_7777_7777_7777L
         assertThat(negOct.asLong()).isEqualTo(-9223372036854775808L); // 010_0000_0000_0000_0000_0000L
         assertThat(posHex.asLong()).isEqualTo(0x7fff_ffff_ffff_ffffL);
         assertThat(negHex.asLong()).isEqualTo(0xffff_ffff_ffff_ffffL);
-        assertThat(posBin.asLong()).isEqualTo(0b0111_1111_1111_1111_1111_1111_1111_1111_1111_1111_1111_1111_1111_1111_1111_1111L);
-        assertThat(negBin.asLong()).isEqualTo(0b1000_0000_0000_0000_0000_0000_0000_0000_0000_0000_0000_0000_0000_0000_0000_0000L);
+        assertThat(posBin.asLong())
+                .isEqualTo(0b0111_1111_1111_1111_1111_1111_1111_1111_1111_1111_1111_1111_1111_1111_1111_1111L);
+        assertThat(negBin.asLong())
+                .isEqualTo(0b1000_0000_0000_0000_0000_0000_0000_0000_0000_0000_0000_0000_0000_0000_0000_0000L);
     }
 
     @Test
     void charLiteralsAreConverted() {
-        CharLiteralExpr a = parseExpression("'a'");
-        CharLiteralExpr percent = parseExpression("'%'");
-        CharLiteralExpr tab = parseExpression("'\\t'");
-        CharLiteralExpr newLine = parseExpression("'\\n'");
-        CharLiteralExpr slash = parseExpression("'\\\\'");
-        CharLiteralExpr quote = parseExpression("'\\''");
-        CharLiteralExpr omega = parseExpression("'\\u03a9'");
-        CharLiteralExpr unicode = parseExpression("'\\uFFFF'");
-        CharLiteralExpr ascii = parseExpression("'\\177'");
-        CharLiteralExpr trademark = parseExpression("'™'");
+        CharLiteralExpr a = parser.parseExpression("'a'");
+        CharLiteralExpr percent = parser.parseExpression("'%'");
+        CharLiteralExpr tab = parser.parseExpression("'\\t'");
+        CharLiteralExpr newLine = parser.parseExpression("'\\n'");
+        CharLiteralExpr slash = parser.parseExpression("'\\\\'");
+        CharLiteralExpr quote = parser.parseExpression("'\\''");
+        CharLiteralExpr omega = parser.parseExpression("'\\u03a9'");
+        CharLiteralExpr unicode = parser.parseExpression("'\\uFFFF'");
+        CharLiteralExpr ascii = parser.parseExpression("'\\177'");
+        CharLiteralExpr trademark = parser.parseExpression("'™'");
 
         assertThat(a.asChar()).isEqualTo('a');
         assertThat(percent.asChar()).isEqualTo('%');
@@ -156,12 +167,12 @@ class LiteralStringValueExprTest {
 
     @Test
     void lowerAndUpperBoundDoublesAreConverted() {
-        DoubleLiteralExpr posFloat = parseExpression("3.4028235e38f");
-        DoubleLiteralExpr negFloat = parseExpression("1.40e-45f");
-        DoubleLiteralExpr posDouble = parseExpression("1.7976931348623157e308");
-        DoubleLiteralExpr negDouble = parseExpression("4.9e-324");
-        DoubleLiteralExpr posHexFloat = parseExpression("0x1.fffffffffffffp1023");
-        DoubleLiteralExpr negHexFloat = parseExpression("0x0.0000000000001P-1022");
+        DoubleLiteralExpr posFloat = parser.parseExpression("3.4028235e38f");
+        DoubleLiteralExpr negFloat = parser.parseExpression("1.40e-45f");
+        DoubleLiteralExpr posDouble = parser.parseExpression("1.7976931348623157e308");
+        DoubleLiteralExpr negDouble = parser.parseExpression("4.9e-324");
+        DoubleLiteralExpr posHexFloat = parser.parseExpression("0x1.fffffffffffffp1023");
+        DoubleLiteralExpr negHexFloat = parser.parseExpression("0x0.0000000000001P-1022");
 
         assertThat(posFloat.asDouble()).isCloseTo(3.4028235e38f, Percentage.withPercentage(1));
         assertThat(negFloat.asDouble()).isCloseTo(1.40e-45f, Percentage.withPercentage(1));
@@ -179,7 +190,79 @@ class LiteralStringValueExprTest {
         assertThat(new StringLiteralExpr("").setEscapedValue("\r").getValue()).isEqualTo("\\r");
         assertThat(new StringLiteralExpr("").setEscapedValue("\n").asString()).isEqualTo("\n");
         assertThat(new StringLiteralExpr("").setEscapedValue("\r").asString()).isEqualTo("\r");
-        assertThat(new StringLiteralExpr("Hello\nWorld\rHello\"World\'").asString()).isEqualTo("Hello\nWorld\rHello\"World\'");
+        assertThat(new StringLiteralExpr("Hello\nWorld\rHello\"World\'").asString())
+                .isEqualTo("Hello\nWorld\rHello\"World\'");
     }
 
+    @Test
+    void issue4791Test() {
+        String a = new String("Hello World");
+        String b = new String("Hello World");
+        StringLiteralExpr expression = new StringLiteralExpr(a);
+
+        AstObserver observer = mock(AstObserver.class);
+        expression.register(observer);
+
+        expression.setValue(b);
+
+        verifyNoInteractions(observer);
+    }
+
+    @Test
+    @SuppressWarnings("deprecation")
+    void typedSettersNotifyObservers() {
+        AstObserver observer = mock(AstObserver.class);
+
+        StringLiteralExpr string = new StringLiteralExpr("a");
+        string.register(observer);
+        string.setString("b\n");
+        verify(observer).propertyChange(string, ObservableProperty.VALUE, "a", "b\\n");
+        string.setEscapedValue("c");
+        verify(observer).propertyChange(string, ObservableProperty.VALUE, "b\\n", "c");
+
+        CharLiteralExpr character = new CharLiteralExpr("a");
+        character.register(observer);
+        character.setChar('b');
+        verify(observer).propertyChange(character, ObservableProperty.VALUE, "a", "b");
+
+        DoubleLiteralExpr doubleLiteral = new DoubleLiteralExpr("1.0");
+        doubleLiteral.register(observer);
+        doubleLiteral.setDouble(2.5);
+        verify(observer).propertyChange(doubleLiteral, ObservableProperty.VALUE, "1.0", "2.5");
+
+        IntegerLiteralExpr integer = new IntegerLiteralExpr("1");
+        integer.register(observer);
+        integer.setInt(2);
+        verify(observer).propertyChange(integer, ObservableProperty.VALUE, "1", "2");
+
+        LongLiteralExpr longLiteral = new LongLiteralExpr("1L");
+        longLiteral.register(observer);
+        longLiteral.setLong(2);
+        verify(observer).propertyChange(longLiteral, ObservableProperty.VALUE, "1L", "2");
+    }
+
+    @Test
+    @SuppressWarnings("deprecation")
+    void typedSettersDoNotNotifyForTheSameValue() {
+        AstObserver observer = mock(AstObserver.class);
+        StringLiteralExpr string = new StringLiteralExpr("a");
+        CharLiteralExpr character = new CharLiteralExpr("a");
+        DoubleLiteralExpr doubleLiteral = new DoubleLiteralExpr("1.0");
+        IntegerLiteralExpr integer = new IntegerLiteralExpr("1");
+        LongLiteralExpr longLiteral = new LongLiteralExpr("1");
+        string.register(observer);
+        character.register(observer);
+        doubleLiteral.register(observer);
+        integer.register(observer);
+        longLiteral.register(observer);
+
+        string.setString("a");
+        string.setEscapedValue("a");
+        character.setChar('a');
+        doubleLiteral.setDouble(1.0);
+        integer.setInt(1);
+        longLiteral.setLong(1);
+
+        verifyNoInteractions(observer);
+    }
 }

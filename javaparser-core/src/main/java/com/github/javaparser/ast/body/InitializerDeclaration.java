@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2007-2010 Júlio Vilmar Gesser.
- * Copyright (C) 2011, 2013-2021 The JavaParser Team.
+ * Copyright (C) 2011, 2013-2026 The JavaParser Team.
  *
  * This file is part of JavaParser.
  *
@@ -20,6 +20,8 @@
  */
 package com.github.javaparser.ast.body;
 
+import static com.github.javaparser.utils.Utils.assertNotNull;
+
 import com.github.javaparser.TokenRange;
 import com.github.javaparser.ast.AllFieldsConstructor;
 import com.github.javaparser.ast.Generated;
@@ -35,14 +37,14 @@ import com.github.javaparser.metamodel.InitializerDeclarationMetaModel;
 import com.github.javaparser.metamodel.JavaParserMetaModel;
 import java.util.Optional;
 import java.util.function.Consumer;
-import static com.github.javaparser.utils.Utils.assertNotNull;
 
 /**
  * A (possibly static) initializer body. "static { a=3; }" in this example: {@code class X { static { a=3; }  } }
  *
  * @author Julio Vilmar Gesser
  */
-public class InitializerDeclaration extends BodyDeclaration<InitializerDeclaration> implements NodeWithJavadoc<InitializerDeclaration>, NodeWithBlockStmt<InitializerDeclaration> {
+public class InitializerDeclaration extends BodyDeclaration<InitializerDeclaration>
+        implements NodeWithJavadoc<InitializerDeclaration>, NodeWithBlockStmt<InitializerDeclaration> {
 
     private boolean isStatic;
 
@@ -97,8 +99,7 @@ public class InitializerDeclaration extends BodyDeclaration<InitializerDeclarati
             return this;
         }
         notifyPropertyChange(ObservableProperty.BODY, this.body, body);
-        if (this.body != null)
-            this.body.setParentNode(null);
+        if (this.body != null) this.body.setParentNode(null);
         this.body = body;
         setAsParentNodeOf(body);
         return this;
@@ -112,14 +113,6 @@ public class InitializerDeclaration extends BodyDeclaration<InitializerDeclarati
         notifyPropertyChange(ObservableProperty.STATIC, this.isStatic, isStatic);
         this.isStatic = isStatic;
         return this;
-    }
-
-    @Override
-    @Generated("com.github.javaparser.generator.core.node.RemoveMethodGenerator")
-    public boolean remove(Node node) {
-        if (node == null)
-            return false;
-        return super.remove(node);
     }
 
     @Override
@@ -137,8 +130,9 @@ public class InitializerDeclaration extends BodyDeclaration<InitializerDeclarati
     @Override
     @Generated("com.github.javaparser.generator.core.node.ReplaceMethodGenerator")
     public boolean replace(Node node, Node replacementNode) {
-        if (node == null)
+        if (node == null) {
             return false;
+        }
         if (node == body) {
             setBody((BlockStmt) replacementNode);
             return true;

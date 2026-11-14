@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2007-2010 Júlio Vilmar Gesser.
- * Copyright (C) 2011, 2013-2021 The JavaParser Team.
+ * Copyright (C) 2011, 2013-2026 The JavaParser Team.
  *
  * This file is part of JavaParser.
  *
@@ -20,6 +20,8 @@
  */
 package com.github.javaparser.ast.expr;
 
+import static com.github.javaparser.utils.Utils.assertNotNull;
+
 import com.github.javaparser.TokenRange;
 import com.github.javaparser.ast.AllFieldsConstructor;
 import com.github.javaparser.ast.Generated;
@@ -34,10 +36,11 @@ import com.github.javaparser.metamodel.JavaParserMetaModel;
 import com.github.javaparser.metamodel.NameExprMetaModel;
 import com.github.javaparser.resolution.Resolvable;
 import com.github.javaparser.resolution.UnsolvedSymbolException;
+import com.github.javaparser.resolution.declarations.ResolvedDeclaration;
+import com.github.javaparser.resolution.declarations.ResolvedTypeDeclaration;
 import com.github.javaparser.resolution.declarations.ResolvedValueDeclaration;
 import java.util.Optional;
 import java.util.function.Consumer;
-import static com.github.javaparser.utils.Utils.assertNotNull;
 
 /**
  * Whenever a SimpleName is used in an expression, it is wrapped in NameExpr.
@@ -45,7 +48,31 @@ import static com.github.javaparser.utils.Utils.assertNotNull;
  *
  * @author Julio Vilmar Gesser
  */
-public class NameExpr extends Expression implements NodeWithSimpleName<NameExpr>, Resolvable<ResolvedValueDeclaration> {
+/**
+ * BREAKING CHANGE (introduced to fix issue #2684):
+ * This class previously implemented {@code Resolvable<ResolvedValueDeclaration>}, implying that
+ * every {@code NameExpr} denotes a value. That assumption is incorrect per JLS §6.5: a simple
+ * name is contextually ambiguous and may denote either a <em>value</em> (variable, field,
+ * parameter) or a <em>type</em> (class, interface, enum), depending on where it appears in the
+ * source code.
+ *
+ * <p>The type parameter has been widened to {@code ResolvedDeclaration}, the common supertype
+ * of both {@link ResolvedValueDeclaration} and {@link ResolvedTypeDeclaration}, so that
+ * {@link #resolve()} can return the correct kind of declaration without throwing for type-denoting
+ * names such as {@code System} in {@code System.out.println()}.
+ *
+ * <p><b>Migration guide for existing callers of {@code resolve()}:</b>
+ * <ul>
+ *   <li>If you know the name is a value (variable, field, parameter), cast the result:
+ *       {@code (ResolvedValueDeclaration) nameExpr.resolve()} — or check first with
+ *       {@code !decl.isType()}.</li>
+ *   <li>If you know the name is a type, cast to {@link ResolvedTypeDeclaration} and verify
+ *       with {@code decl.isType()}.</li>
+ *   <li>If the kind is unknown (e.g., when iterating all {@code NameExpr} nodes), branch on
+ *       {@code decl.isType()} before casting.</li>
+ * </ul>
+ */
+public class NameExpr extends Expression implements NodeWithSimpleName<NameExpr>, Resolvable<ResolvedDeclaration> {
 
     private SimpleName name;
 
@@ -97,19 +124,10 @@ public class NameExpr extends Expression implements NodeWithSimpleName<NameExpr>
             return this;
         }
         notifyPropertyChange(ObservableProperty.NAME, this.name, name);
-        if (this.name != null)
-            this.name.setParentNode(null);
+        if (this.name != null) this.name.setParentNode(null);
         this.name = name;
         setAsParentNodeOf(name);
         return this;
-    }
-
-    @Override
-    @Generated("com.github.javaparser.generator.core.node.RemoveMethodGenerator")
-    public boolean remove(Node node) {
-        if (node == null)
-            return false;
-        return super.remove(node);
     }
 
     @Override
@@ -127,8 +145,9 @@ public class NameExpr extends Expression implements NodeWithSimpleName<NameExpr>
     @Override
     @Generated("com.github.javaparser.generator.core.node.ReplaceMethodGenerator")
     public boolean replace(Node node, Node replacementNode) {
-        if (node == null)
+        if (node == null) {
             return false;
+        }
         if (node == name) {
             setName((SimpleName) replacementNode);
             return true;
@@ -155,20 +174,48 @@ public class NameExpr extends Expression implements NodeWithSimpleName<NameExpr>
     }
 
     /**
-     * Attempts to resolve the declaration corresponding to the accessed name. If successful, a
-     * {@link ResolvedValueDeclaration} representing the declaration of the value accessed by this {@code NameExpr} is
-     * returned. Otherwise, an {@link UnsolvedSymbolException} is thrown.
+     * Resolves the declaration corresponding to this name expression.
      *
-     * @return a {@link ResolvedValueDeclaration} representing the declaration of the accessed value.
-     * @throws UnsolvedSymbolException if the declaration corresponding to the name expression could not be resolved.
+     * <p>A {@code NameExpr} is contextually ambiguous per JLS §6.5: the same syntactic construct
+     * may denote either a <em>value</em> (variable, field, parameter, enum constant) or a
+     * <em>type</em> (class, interface, enum), depending on where it appears in the source code.
+     * Examples:
+     * <ul>
+     *   <li>{@code count} in {@code count + 1} is a value name — resolves to a
+     *       {@link ResolvedValueDeclaration}.</li>
+     *   <li>{@code System} in {@code System.out.println()} is a type name — resolves to a
+     *       {@link ResolvedTypeDeclaration}.</li>
+     * </ul>
+     *
+     * <p>The return type is {@link ResolvedDeclaration}, the common supertype of both
+     * {@link ResolvedValueDeclaration} and {@link ResolvedTypeDeclaration}. Use
+     * {@link ResolvedDeclaration#isType()} on the result to determine the actual kind, then
+     * cast accordingly:
+     * <pre>{@code
+     * ResolvedDeclaration decl = nameExpr.resolve();
+     * if (decl.isType()) {
+     *     ResolvedTypeDeclaration typeDecl = (ResolvedTypeDeclaration) decl;
+     * } else {
+     *     ResolvedValueDeclaration valueDecl = (ResolvedValueDeclaration) decl;
+     * }
+     * }</pre>
+     *
+     * <p><b>Note for existing callers (breaking change from prior versions):</b> this method
+     * previously returned {@link ResolvedValueDeclaration}. Code that assigns the result to a
+     * {@code ResolvedValueDeclaration} variable must either widen the variable type to
+     * {@link ResolvedDeclaration} or add a cast for the value case.
+     *
+     * @return a {@link ResolvedDeclaration} — either a {@link ResolvedValueDeclaration} for
+     *         value-denoting names or a {@link ResolvedTypeDeclaration} for type-denoting names.
+     * @throws UnsolvedSymbolException if the name cannot be resolved as a value or as a type.
      * @see FieldAccessExpr#resolve()
      * @see MethodCallExpr#resolve()
      * @see ObjectCreationExpr#resolve()
      * @see ExplicitConstructorInvocationStmt#resolve()
      */
     @Override
-    public ResolvedValueDeclaration resolve() {
-        return getSymbolResolver().resolveDeclaration(this, ResolvedValueDeclaration.class);
+    public ResolvedDeclaration resolve() {
+        return getSymbolResolver().resolveDeclaration(this, ResolvedDeclaration.class);
     }
 
     @Override

@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2015-2016 Federico Tomassetti
- * Copyright (C) 2017-2019 The JavaParser Team.
+ * Copyright (C) 2017-2026 The JavaParser Team.
  *
  * This file is part of JavaParser.
  *
@@ -21,39 +21,45 @@
 
 package com.github.javaparser.symbolsolver.resolution.javaparser.contexts;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+
 import com.github.javaparser.ParseException;
 import com.github.javaparser.ast.CompilationUnit;
+import com.github.javaparser.ast.expr.FieldAccessExpr;
+import com.github.javaparser.ast.expr.NameExpr;
+import com.github.javaparser.resolution.Context;
+import com.github.javaparser.resolution.TypeSolver;
 import com.github.javaparser.resolution.declarations.ResolvedMethodDeclaration;
 import com.github.javaparser.resolution.declarations.ResolvedReferenceTypeDeclaration;
 import com.github.javaparser.resolution.declarations.ResolvedTypeDeclaration;
 import com.github.javaparser.resolution.declarations.ResolvedValueDeclaration;
+import com.github.javaparser.resolution.model.SymbolReference;
+import com.github.javaparser.resolution.model.Value;
+import com.github.javaparser.resolution.model.typesystem.NullType;
 import com.github.javaparser.resolution.types.ResolvedPrimitiveType;
 import com.github.javaparser.resolution.types.ResolvedType;
-import com.github.javaparser.symbolsolver.core.resolution.Context;
+import com.github.javaparser.symbolsolver.javaparsermodel.JavaParserFacade;
 import com.github.javaparser.symbolsolver.javaparsermodel.contexts.CompilationUnitContext;
-import com.github.javaparser.symbolsolver.model.resolution.SymbolReference;
-import com.github.javaparser.symbolsolver.model.resolution.TypeSolver;
-import com.github.javaparser.symbolsolver.model.resolution.Value;
-import com.github.javaparser.symbolsolver.model.typesystem.NullType;
 import com.github.javaparser.symbolsolver.resolution.AbstractResolutionTest;
 import com.github.javaparser.symbolsolver.resolution.typesolvers.CombinedTypeSolver;
 import com.github.javaparser.symbolsolver.resolution.typesolvers.JarTypeSolver;
+import com.github.javaparser.symbolsolver.resolution.typesolvers.JavaParserTypeSolver;
 import com.github.javaparser.symbolsolver.resolution.typesolvers.MemoryTypeSolver;
 import com.github.javaparser.symbolsolver.resolution.typesolvers.ReflectionTypeSolver;
 import com.google.common.collect.ImmutableList;
+import java.io.IOException;
+import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import java.io.IOException;
-import java.util.Optional;
-
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
-
 /**
  * @author Federico Tomassetti
-a */
+ * a */
 class CompilationUnitContextResolutionTest extends AbstractResolutionTest {
 
     private TypeSolver typeSolver;
@@ -107,7 +113,9 @@ class CompilationUnitContextResolutionTest extends AbstractResolutionTest {
         SymbolReference<? extends ResolvedValueDeclaration> ref = context.solveSymbol("out");
 
         assertEquals(true, ref.isSolved());
-        assertEquals("java.io.PrintStream", ref.getCorrespondingDeclaration().getType().asReferenceType().getQualifiedName());
+        assertEquals(
+                "java.io.PrintStream",
+                ref.getCorrespondingDeclaration().getType().asReferenceType().getQualifiedName());
     }
 
     @Test
@@ -121,7 +129,9 @@ class CompilationUnitContextResolutionTest extends AbstractResolutionTest {
         Context context = new CompilationUnitContext(cu, typeSolver);
         SymbolReference<? extends ResolvedValueDeclaration> ref = context.solveSymbol("err");
         assertEquals(true, ref.isSolved());
-        assertEquals("java.io.PrintStream", ref.getCorrespondingDeclaration().getType().asReferenceType().getQualifiedName());
+        assertEquals(
+                "java.io.PrintStream",
+                ref.getCorrespondingDeclaration().getType().asReferenceType().getQualifiedName());
     }
 
     @Test
@@ -131,7 +141,9 @@ class CompilationUnitContextResolutionTest extends AbstractResolutionTest {
 
         SymbolReference<? extends ResolvedValueDeclaration> ref = context.solveSymbol("java.lang.System.out");
         assertEquals(true, ref.isSolved());
-        assertEquals("java.io.PrintStream", ref.getCorrespondingDeclaration().getType().asReferenceType().getQualifiedName());
+        assertEquals(
+                "java.io.PrintStream",
+                ref.getCorrespondingDeclaration().getType().asReferenceType().getQualifiedName());
     }
 
     @Test
@@ -183,13 +195,16 @@ class CompilationUnitContextResolutionTest extends AbstractResolutionTest {
         SymbolReference<ResolvedTypeDeclaration> ref = context.solveType("OtherClassInSamePackage");
 
         assertEquals(true, ref.isSolved());
-        assertEquals("com.foo.OtherClassInSamePackage", ref.getCorrespondingDeclaration().getQualifiedName());
+        assertEquals(
+                "com.foo.OtherClassInSamePackage",
+                ref.getCorrespondingDeclaration().getQualifiedName());
     }
 
     @Test
     void solveTypeImported() throws ParseException, IOException {
         CompilationUnit cu = parseSample("CompilationUnitWithImports");
-        Context context = new CompilationUnitContext(cu, new JarTypeSolver(adaptPath("src/test/resources/junit-4.8.1.jar")));
+        Context context =
+                new CompilationUnitContext(cu, new JarTypeSolver(adaptPath("src/test/resources/junit-4.8.1.jar")));
 
         SymbolReference<ResolvedTypeDeclaration> ref = context.solveType("Assert");
         assertEquals(true, ref.isSolved());
@@ -199,7 +214,8 @@ class CompilationUnitContextResolutionTest extends AbstractResolutionTest {
     @Test
     void solveTypeNotImported() throws ParseException, IOException {
         CompilationUnit cu = parseSample("CompilationUnitWithImports");
-        Context context = new CompilationUnitContext(cu, new JarTypeSolver(adaptPath("src/test/resources/junit-4.8.1.jar")));
+        Context context =
+                new CompilationUnitContext(cu, new JarTypeSolver(adaptPath("src/test/resources/junit-4.8.1.jar")));
 
         SymbolReference<ResolvedTypeDeclaration> ref = context.solveType("org.junit.Assume");
         assertEquals(true, ref.isSolved());
@@ -216,12 +232,16 @@ class CompilationUnitContextResolutionTest extends AbstractResolutionTest {
 
         Context context = new CompilationUnitContext(cu, typeSolver);
 
-        SymbolReference<ResolvedMethodDeclaration> ref = context.solveMethod("assertFalse", ImmutableList.of(ResolvedPrimitiveType.BOOLEAN), false);
+        SymbolReference<ResolvedMethodDeclaration> ref =
+                context.solveMethod("assertFalse", ImmutableList.of(ResolvedPrimitiveType.BOOLEAN), false);
         assertEquals(true, ref.isSolved());
         assertEquals("assertFalse", ref.getCorrespondingDeclaration().getName());
         assertEquals(1, ref.getCorrespondingDeclaration().getNumberOfParams());
-        assertEquals("boolean", ref.getCorrespondingDeclaration().getParam(0).getType().describe());
-        assertEquals(true, ref.getCorrespondingDeclaration().getParam(0).getType().isPrimitive());
+        assertEquals(
+                "boolean",
+                ref.getCorrespondingDeclaration().getParam(0).getType().describe());
+        assertEquals(
+                true, ref.getCorrespondingDeclaration().getParam(0).getType().isPrimitive());
     }
 
     @Test
@@ -234,13 +254,76 @@ class CompilationUnitContextResolutionTest extends AbstractResolutionTest {
 
         Context context = new CompilationUnitContext(cu, typeSolver);
 
-        SymbolReference<ResolvedMethodDeclaration> ref = context.solveMethod("assertEquals", ImmutableList.of(NullType.INSTANCE, NullType.INSTANCE), false);
+        SymbolReference<ResolvedMethodDeclaration> ref =
+                context.solveMethod("assertEquals", ImmutableList.of(NullType.INSTANCE, NullType.INSTANCE), false);
         assertEquals(true, ref.isSolved());
         assertEquals("assertEquals", ref.getCorrespondingDeclaration().getName());
         assertEquals(2, ref.getCorrespondingDeclaration().getNumberOfParams());
-        assertEquals("java.lang.Object", ref.getCorrespondingDeclaration().getParam(0).getType().asReferenceType().getQualifiedName());
-        assertEquals("java.lang.Object", ref.getCorrespondingDeclaration().getParam(1).getType().asReferenceType().getQualifiedName());
-
+        assertEquals(
+                "java.lang.Object",
+                ref.getCorrespondingDeclaration()
+                        .getParam(0)
+                        .getType()
+                        .asReferenceType()
+                        .getQualifiedName());
+        assertEquals(
+                "java.lang.Object",
+                ref.getCorrespondingDeclaration()
+                        .getParam(1)
+                        .getType()
+                        .asReferenceType()
+                        .getQualifiedName());
     }
 
+    /**
+     * The fixture's static imports form a cycle (CycleA imports CycleB, CycleB imports CycleA), which
+     * used to recurse forever while resolving a name that none of those types declares. See issue 4450.
+     */
+    @Test
+    void resolveNameInCompilationUnitWithCyclicStaticImportsWithoutStackOverflow() throws IOException {
+        CombinedTypeSolver combinedTypeSolver = new CombinedTypeSolver();
+        combinedTypeSolver.add(new ReflectionTypeSolver());
+        combinedTypeSolver.add(new JavaParserTypeSolver(adaptPath("src/test/resources/static_import_cycle_fixture")));
+
+        CompilationUnit cu =
+                parseSampleWithStandardExtension("static_import_cycle_fixture/cycle/EntryPoint", combinedTypeSolver);
+
+        // Resolving the qualifier as a name is what follows the static imports into the cycle.
+        NameExpr targetRef = cu.findFirst(
+                        NameExpr.class, n -> n.getNameAsString().equals("Target"))
+                .get();
+        assertDoesNotThrow(() -> JavaParserFacade.get(combinedTypeSolver).solve(targetRef));
+
+        FieldAccessExpr objCode = cu.findFirst(
+                        FieldAccessExpr.class, f -> f.getNameAsString().equals("OBJCODE"))
+                .get();
+        assertEquals(
+                "java.lang.String",
+                JavaParserFacade.get(combinedTypeSolver).getType(objCode).describe());
+    }
+
+    /**
+     * Static imports are not transitive (JLS 7.5.3, 7.5.4): EntryPoint statically imports CycleA, and
+     * CycleA statically imports SolvableConstants, but that does not make SolvableConstants.ID a member
+     * of CycleA. A reference to ID in EntryPoint does not compile, so it must not resolve either.
+     */
+    @Test
+    void doesNotResolveNameReachableOnlyThroughTransitiveStaticImport() throws IOException {
+        CombinedTypeSolver combinedTypeSolver = new CombinedTypeSolver();
+        combinedTypeSolver.add(new ReflectionTypeSolver());
+        combinedTypeSolver.add(new JavaParserTypeSolver(adaptPath("src/test/resources/static_import_cycle_fixture")));
+
+        CompilationUnit entryPoint =
+                parseSampleWithStandardExtension("static_import_cycle_fixture/cycle/EntryPoint", combinedTypeSolver);
+        assertFalse(new CompilationUnitContext(entryPoint, combinedTypeSolver)
+                .solveSymbol("ID")
+                .isSolved());
+
+        // Control: the same name resolves from the compilation unit that imports it directly.
+        CompilationUnit cycleA =
+                parseSampleWithStandardExtension("static_import_cycle_fixture/cycle/CycleA", combinedTypeSolver);
+        assertTrue(new CompilationUnitContext(cycleA, combinedTypeSolver)
+                .solveSymbol("ID")
+                .isSolved());
+    }
 }

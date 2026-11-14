@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2007-2010 Júlio Vilmar Gesser.
- * Copyright (C) 2011, 2013-2021 The JavaParser Team.
+ * Copyright (C) 2011, 2013-2026 The JavaParser Team.
  *
  * This file is part of JavaParser.
  *
@@ -18,7 +18,6 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU Lesser General Public License for more details.
  */
-
 package com.github.javaparser.resolution.declarations;
 
 /**
@@ -26,7 +25,7 @@ package com.github.javaparser.resolution.declarations;
  *
  * @author Federico Tomassetti
  */
-public interface ResolvedDeclaration {
+public interface ResolvedDeclaration extends AssociableToAST {
 
     /**
      * Anonymous classes do not have a name, for example.
@@ -64,7 +63,7 @@ public interface ResolvedDeclaration {
     /**
      * Does this declaration represents a pattern declaration?
      */
-    default boolean isPattern() {
+    default boolean isTypePattern() {
         return false;
     }
 
@@ -87,6 +86,25 @@ public interface ResolvedDeclaration {
      * // FIXME: This is never overridden.
      */
     default boolean isMethod() {
+        return false;
+    }
+
+    /**
+     * Does this declaration represent the array length pseudo-field?
+     *
+     * array.length is the only synthetic pseudo-field defined by the JLS (§10.7).
+     * It is a singleton with a fixed name and a fixed type (int), so a dedicated interface would carry no meaningful contract beyond the flag itself.
+     * The existing codebase already follows this lighter approach: isVariable() in ResolvedDeclaration has no companion ResolvedVariableDeclaration interface.
+     * Introducing an empty marker interface just to be symmetric with isField() / isEnumConstant() would be over-engineering for a one-off case.
+     *
+     * The fix is therefore:
+     * Add default boolean isArrayLength() { return false; } to ResolvedDeclaration
+     * Override it to return true inside ArrayLengthValueDeclaration
+     *
+     * If more extensibility were needed in the future — for instance, to expose getArrayType() to retrieve the component type of the backing array — the right move would be to introduce a ResolvedArrayLengthDeclaration interface at that point.
+     * Because all new methods on ResolvedDeclaration are default, and because ArrayLengthValueDeclaration already implements ResolvedValueDeclaration, that refactor could be done without any breaking change.
+     */
+    default boolean isArrayLength() {
         return false;
     }
 
@@ -129,7 +147,7 @@ public interface ResolvedDeclaration {
     /**
      * Return this as a PatternDeclaration or throw an UnsupportedOperationException
      */
-    default ResolvedPatternDeclaration asPattern() {
+    default ResolvedTypePatternDeclaration asTypePattern() {
         throw new UnsupportedOperationException(String.format("%s is not a Pattern", this));
     }
 }

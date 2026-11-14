@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2007-2010 Júlio Vilmar Gesser.
- * Copyright (C) 2011, 2013-2019 The JavaParser Team.
+ * Copyright (C) 2011, 2013-2026 The JavaParser Team.
  *
  * This file is part of JavaParser.
  *
@@ -21,6 +21,13 @@
 
 package com.github.javaparser.printer.lexicalpreservation.transformations.ast.body;
 
+import static com.github.javaparser.ast.Modifier.Keyword.NON_SEALED;
+import static com.github.javaparser.ast.Modifier.Keyword.PROTECTED;
+import static com.github.javaparser.ast.Modifier.Keyword.PUBLIC;
+import static com.github.javaparser.ast.Modifier.Keyword.SEALED;
+import static com.github.javaparser.ast.Modifier.createModifierList;
+
+import com.github.javaparser.ParserConfiguration;
 import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.FieldDeclaration;
@@ -28,13 +35,8 @@ import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.type.PrimitiveType;
 import com.github.javaparser.ast.type.TypeParameter;
 import com.github.javaparser.printer.lexicalpreservation.AbstractLexicalPreservingTest;
+import com.github.javaparser.utils.LineSeparator;
 import org.junit.jupiter.api.Test;
-
-import static com.github.javaparser.StaticJavaParser.parseClassOrInterfaceType;
-import static com.github.javaparser.ast.Modifier.Keyword.PROTECTED;
-import static com.github.javaparser.ast.Modifier.Keyword.PUBLIC;
-import static com.github.javaparser.ast.Modifier.createModifierList;
-import static com.github.javaparser.utils.Utils.SYSTEM_EOL;
 
 /**
  * Transforming ClassOrInterfaceDeclaration and verifying the LexicalPreservation works as expected.
@@ -113,7 +115,7 @@ class ClassOrInterfaceDeclarationTransformationsTest extends AbstractLexicalPres
     @Test
     void replacingExtendedTypes() {
         ClassOrInterfaceDeclaration cid = consider("public class A extends Foo {}");
-        cid.getExtendedTypes().set(0, parseClassOrInterfaceType("Bar"));
+        cid.getExtendedTypes().set(0, parser.parseClassOrInterfaceType("Bar"));
         assertTransformedToString("public class A extends Bar {}", cid);
     }
 
@@ -136,7 +138,7 @@ class ClassOrInterfaceDeclarationTransformationsTest extends AbstractLexicalPres
     @Test
     void replacingImplementedTypes() {
         ClassOrInterfaceDeclaration cid = consider("public class A implements Foo {}");
-        cid.getImplementedTypes().set(0, parseClassOrInterfaceType("Bar"));
+        cid.getImplementedTypes().set(0, parser.parseClassOrInterfaceType("Bar"));
         assertTransformedToString("public class A implements Bar {}", cid);
     }
 
@@ -163,48 +165,150 @@ class ClassOrInterfaceDeclarationTransformationsTest extends AbstractLexicalPres
         assertTransformedToString("protected class A {}", cid);
     }
 
+    /**
+     * Modifiers used to be mapped to their token by a hand-written switch that predated the sealed
+     * classes: {@code sealed}, {@code non-sealed} and {@code default} all threw
+     * {@link UnsupportedOperationException} instead of being printed.
+     */
+    @Test
+    void addingSealedModifier() {
+        ClassOrInterfaceDeclaration cid = consider("class A {}");
+        cid.setModifiers(createModifierList(SEALED));
+        assertTransformedToString("sealed class A {}", cid);
+    }
+
+    @Test
+    void addingNonSealedModifier() {
+        ClassOrInterfaceDeclaration cid = consider("class A {}");
+        cid.setModifiers(createModifierList(NON_SEALED));
+        assertTransformedToString("non-sealed class A {}", cid);
+    }
+
     // members
 
     @Test
     void addingField() {
         ClassOrInterfaceDeclaration cid = consider("class A {}");
         cid.addField("int", "foo");
-        assertTransformedToString("class A {" + SYSTEM_EOL + "    int foo;" + SYSTEM_EOL + "}", cid);
+        assertTransformedToString(
+                "class A {" + LineSeparator.SYSTEM + "    int foo;" + LineSeparator.SYSTEM + "}", cid);
     }
 
     @Test
     void removingField() {
         ClassOrInterfaceDeclaration cid = consider("public class A { int foo; }");
         cid.getMembers().remove(0);
-        assertTransformedToString("public class A {  }", cid);
+        assertTransformedToString("public class A { }", cid);
     }
 
     @Test
     void replacingFieldWithAnotherField() {
         ClassOrInterfaceDeclaration cid = consider("public class A {float f;}");
-        cid.getMembers().set(0, new FieldDeclaration(new NodeList<>(), new VariableDeclarator(PrimitiveType.intType(), "bar")));
+        cid.getMembers()
+                .set(0, new FieldDeclaration(new NodeList<>(), new VariableDeclarator(PrimitiveType.intType(), "bar")));
         assertTransformedToString("public class A {int bar;}", cid);
     }
 
     // Annotations
     @Test
     void removingAnnotations() {
-        ClassOrInterfaceDeclaration cid = consider(
-                "@Value" + SYSTEM_EOL +
-                "public class A {}");
+        ClassOrInterfaceDeclaration cid = consider("@Value" + LineSeparator.SYSTEM + "public class A {}");
         cid.getAnnotationByName("Value").get().remove();
         assertTransformedToString("public class A {}", cid);
     }
 
     @Test
     void removingAnnotationsWithSpaces() {
-        ClassOrInterfaceDeclaration cid = consider(
-                  "   @Value " + SYSTEM_EOL +
-                        "public class A {}");
+        ClassOrInterfaceDeclaration cid = consider("   @Value " + LineSeparator.SYSTEM + "public class A {}");
         cid.getAnnotationByName("Value").get().remove();
         assertTransformedToString("public class A {}", cid);
     }
 
     // Javadoc
 
+    // Compact Classes (Java 25)
+
+    @Test
+    void addingFieldToCompactClass() {
+        parser.getParserConfiguration().setLanguageLevel(ParserConfiguration.LanguageLevel.JAVA_25);
+        considerCode("void main() { }");
+        ClassOrInterfaceDeclaration cid = cu.getType(0).asClassOrInterfaceDeclaration();
+        cid.addField("int", "count");
+        assertTransformedToString("void main() { }" + LineSeparator.SYSTEM + LineSeparator.SYSTEM + "int count;", cid);
+    }
+
+    @Test
+    void addingMethodToCompactClass() {
+        parser.getParserConfiguration().setLanguageLevel(ParserConfiguration.LanguageLevel.JAVA_25);
+        considerCode("void main() { }");
+        ClassOrInterfaceDeclaration cid = cu.getType(0).asClassOrInterfaceDeclaration();
+        cid.addMethod("greet", PUBLIC);
+        assertTransformedToString(
+                "void main() { }" + LineSeparator.SYSTEM + LineSeparator.SYSTEM + "public void greet() {"
+                        + LineSeparator.SYSTEM + "}",
+                cid);
+    }
+
+    @Test
+    void modifyingFieldInCompactClass() {
+        parser.getParserConfiguration().setLanguageLevel(ParserConfiguration.LanguageLevel.JAVA_25);
+        considerCode("int count = 0;" + LineSeparator.SYSTEM + LineSeparator.SYSTEM + "void main() { }");
+        ClassOrInterfaceDeclaration cid = cu.getType(0).asClassOrInterfaceDeclaration();
+        cid.getFields().get(0).getVariables().get(0).setType(PrimitiveType.longType());
+        assertTransformedToString(
+                "long count = 0;" + LineSeparator.SYSTEM + LineSeparator.SYSTEM + "void main() { }", cid);
+    }
+
+    @Test
+    void modifyingMethodInCompactClass() {
+        parser.getParserConfiguration().setLanguageLevel(ParserConfiguration.LanguageLevel.JAVA_25);
+        considerCode("int add(int a, int b) { return a + b; }" + LineSeparator.SYSTEM + LineSeparator.SYSTEM
+                + "void main() { }");
+        ClassOrInterfaceDeclaration cid = cu.getType(0).asClassOrInterfaceDeclaration();
+        cid.getMethods().get(0).setName("subtract");
+        assertTransformedToString(
+                "int subtract(int a, int b) { return a + b; }" + LineSeparator.SYSTEM + LineSeparator.SYSTEM
+                        + "void main() { }",
+                cid);
+    }
+
+    @Test
+    void removingFieldFromCompactClass() {
+        parser.getParserConfiguration().setLanguageLevel(ParserConfiguration.LanguageLevel.JAVA_25);
+        considerCode("int count = 0;" + LineSeparator.SYSTEM + LineSeparator.SYSTEM + "void main() { }");
+        ClassOrInterfaceDeclaration cid = cu.getType(0).asClassOrInterfaceDeclaration();
+        cid.getMembers().remove(0);
+        assertTransformedToString("void main() { }", cid);
+    }
+
+    @Test
+    void removingMethodFromCompactClass() {
+        parser.getParserConfiguration().setLanguageLevel(ParserConfiguration.LanguageLevel.JAVA_25);
+        considerCode("int add(int a, int b) { return a + b; }" + LineSeparator.SYSTEM + LineSeparator.SYSTEM
+                + "void main() { }");
+        ClassOrInterfaceDeclaration cid = cu.getType(0).asClassOrInterfaceDeclaration();
+        cid.getMembers().remove(0);
+        assertTransformedToString("void main() { }", cid);
+    }
+
+    @Test
+    void makingNonCompactClassCompact() {
+        parser.getParserConfiguration().setLanguageLevel(ParserConfiguration.LanguageLevel.JAVA_25);
+        considerCode("class Foo {" + LineSeparator.SYSTEM + "    void main() { }" + LineSeparator.SYSTEM + "}");
+        ClassOrInterfaceDeclaration cid = cu.getType(0).asClassOrInterfaceDeclaration();
+        cid.setCompact(true);
+        assertTransformedToString(LineSeparator.SYSTEM + "void main() { }", cid);
+    }
+
+    @Test
+    void makingCompactClassNonCompact() {
+        parser.getParserConfiguration().setLanguageLevel(ParserConfiguration.LanguageLevel.JAVA_25);
+        considerCode("void main() { }");
+        ClassOrInterfaceDeclaration cid = cu.getType(0).asClassOrInterfaceDeclaration();
+        cid.setCompact(false);
+        assertTransformedToString(
+                "final class $COMPACT_CLASS {" + LineSeparator.SYSTEM + "       void main() { }" + LineSeparator.SYSTEM
+                        + "}",
+                cid);
+    }
 }

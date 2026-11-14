@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2007-2010 Júlio Vilmar Gesser.
- * Copyright (C) 2011, 2013-2021 The JavaParser Team.
+ * Copyright (C) 2011, 2013-2026 The JavaParser Team.
  *
  * This file is part of JavaParser.
  *
@@ -21,16 +21,15 @@
 
 package com.github.javaparser;
 
-import com.github.javaparser.ast.ArrayCreationLevel;
-import com.github.javaparser.ast.Node;
-import com.github.javaparser.ast.NodeList;
+import com.github.javaparser.ast.*;
+import com.github.javaparser.ast.body.BodyDeclaration;
+import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.Parameter;
+import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.comments.CommentsCollection;
 import com.github.javaparser.ast.expr.*;
 import com.github.javaparser.ast.stmt.Statement;
-import com.github.javaparser.ast.type.ArrayType;
-import com.github.javaparser.ast.type.Type;
-import com.github.javaparser.ast.type.UnknownType;
+import com.github.javaparser.ast.type.*;
 import com.github.javaparser.utils.Pair;
 
 import java.util.*;
@@ -53,6 +52,8 @@ abstract class GeneratedJavaParserBase {
     abstract JavaToken token();
 
     abstract Token getNextToken();
+
+    abstract Token getToken(final int index);
 
     ////
 
@@ -204,6 +205,49 @@ abstract class GeneratedJavaParserBase {
         problems.add(new Problem(makeMessageForParseException(p), tokenRange, p));
         return tokenRange;
     }
+    /* Called from within a catch block to skip forward to a known token,
+        and report the occurred exception as a problem. */
+    TokenRange recoverStatement(int recoveryTokenType, int lBraceType, int rBraceType, ParseException p) {
+        return recoverStatement(recoveryTokenType, lBraceType, rBraceType, p, null);
+    }
+
+    /* beginToken is the offending token. Null keeps the historical begin: the last consumed token. */
+    TokenRange recoverStatement(
+            int recoveryTokenType, int lBraceType, int rBraceType, ParseException p, Token beginToken) {
+        JavaToken begin = null;
+        if (beginToken != null) {
+            begin = beginToken.javaToken;
+        } else if (p.currentToken != null) {
+            begin = token();
+        }
+        int level = 0;
+        Token t;
+        do {
+            Token nextToken = getToken(1);
+            if (nextToken != null && nextToken.kind == rBraceType && level == 0) {
+                JavaToken end = token();
+                TokenRange tokenRange = range(begin, end);
+                problems.add(new Problem(makeMessageForParseException(p), tokenRange, p));
+                return tokenRange;
+            }
+            t = getNextToken();
+            if (t.kind == lBraceType) {
+                level++;
+            } else if (t.kind == rBraceType) {
+                level--;
+            }
+        } while (!(t.kind == recoveryTokenType && level == 0) && t.kind != EOF);
+
+        JavaToken end = token();
+
+        TokenRange tokenRange = null;
+        if (begin != null && end != null) {
+            tokenRange = range(begin, end);
+        }
+
+        problems.add(new Problem(makeMessageForParseException(p), tokenRange, p));
+        return tokenRange;
+    }
 
     /**
      * Quickly create a new, empty, NodeList
@@ -279,7 +323,7 @@ abstract class GeneratedJavaParserBase {
         if (ret instanceof EnclosedExpr) {
             Expression inner = ((EnclosedExpr) ret).getInner();
             SimpleName id = ((NameExpr) inner).getName();
-            NodeList<Parameter> params = add(new NodeList<>(), new Parameter(ret.getTokenRange().orElse(null), new NodeList<>(), new NodeList<>(), new UnknownType(), false, new NodeList<>(), id));
+            NodeList<Parameter> params = add(new NodeList<>(), new Parameter(id.getTokenRange().orElse(null), new NodeList<>(), new NodeList<>(), new UnknownType(), false, new NodeList<>(), id));
             ret = new LambdaExpr(range(ret, lambdaBody), params, lambdaBody, true);
         } else if (ret instanceof NameExpr) {
             SimpleName id = ((NameExpr) ret).getName();
@@ -292,6 +336,7 @@ abstract class GeneratedJavaParserBase {
             CastExpr castExpr = (CastExpr) ret;
             Expression inner = generateLambda(castExpr.getExpression(), lambdaBody);
             castExpr.setExpression(inner);
+            propagateRangeGrowthOnRight(castExpr, inner);
         } else {
             addProblem("Failed to parse lambda expression! Please create an issue at https://github.com/javaparser/javaparser/issues");
         }
@@ -381,11 +426,11 @@ abstract class GeneratedJavaParserBase {
     Name scopeToName(Expression scope) {
         if (scope.isNameExpr()) {
             SimpleName simpleName = scope.asNameExpr().getName();
-            return new Name(simpleName.getTokenRange().get(), null, simpleName.getIdentifier());
+            return new Name(simpleName.getTokenRange().orElse(null), null, simpleName.getIdentifier());
         }
         if (scope.isFieldAccessExpr()) {
             FieldAccessExpr fieldAccessExpr = scope.asFieldAccessExpr();
-            return new Name(fieldAccessExpr.getTokenRange().get(), scopeToName(fieldAccessExpr.getScope()), fieldAccessExpr.getName().getIdentifier());
+            return new Name(fieldAccessExpr.getTokenRange().orElse(null), scopeToName(fieldAccessExpr.getScope()), fieldAccessExpr.getName().getIdentifier());
 
         }
         throw new IllegalStateException("Unexpected expression type: " + scope.getClass().getSimpleName());
@@ -409,5 +454,47 @@ abstract class GeneratedJavaParserBase {
 
     void setYieldSupported() {
         getTokenSource().setYieldSupported();
+    }
+
+    NodeList<TypeDeclaration<?>> typeDeclarationsForCu(NodeList<BodyDeclaration<?>> bodyDeclarations) {
+        NodeList<TypeDeclaration<?>> types = emptyNodeList();
+        // If all the body declarations are type declarations, then this is not a compact class declaration, so nothing
+        // special needs to be done. Just return the declarations cast to type declarations.
+        if (bodyDeclarations.stream().allMatch(BodyDeclaration::isTypeDeclaration)) {
+            for (BodyDeclaration<?> bodyDeclaration : bodyDeclarations) {
+                types.add(bodyDeclaration.asTypeDeclaration());
+            }
+            return types;
+        }
+
+        // If the above return wasn't hit, then this is a compact class declaration, so the type declaration for the
+        // implicit class must be created manually and all the found body declarations added as children of that.
+        // We also know at this point that at least one body declaration exists, otherwise allMatch would have matched
+        // the empty list.
+
+        ClassOrInterfaceDeclaration compactClass = new ClassOrInterfaceDeclaration(
+                new NodeList<Modifier>(),
+                false,
+                "$COMPACT_CLASS"
+        );
+
+        Optional<TokenRange> maybeStartingRange = bodyDeclarations.get(0).getTokenRange();
+        Optional<TokenRange> maybeEndRange = bodyDeclarations.get(bodyDeclarations.size() - 1).getTokenRange();
+        if (maybeStartingRange.isPresent() && maybeEndRange.isPresent()) {
+            JavaToken begin = maybeStartingRange.get().getBegin();
+            JavaToken end = maybeEndRange.get().getEnd();
+            TokenRange tokenRange = new TokenRange(begin, end);
+
+            compactClass.setTokenRange(tokenRange);
+        }
+        compactClass.setCompact(true);
+        compactClass.addModifier(Modifier.Keyword.FINAL);
+
+        for (BodyDeclaration<?> bodyDeclaration : bodyDeclarations) {
+            compactClass.addMember(bodyDeclaration);
+        }
+
+        types.add(compactClass);
+        return types;
     }
 }

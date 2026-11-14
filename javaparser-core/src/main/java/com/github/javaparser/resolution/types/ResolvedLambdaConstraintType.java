@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2007-2010 Júlio Vilmar Gesser.
- * Copyright (C) 2011, 2013-2021 The JavaParser Team.
+ * Copyright (C) 2011, 2013-2026 The JavaParser Team.
  *
  * This file is part of JavaParser.
  *
@@ -18,19 +18,25 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU Lesser General Public License for more details.
  */
-
 package com.github.javaparser.resolution.types;
 
 public class ResolvedLambdaConstraintType implements ResolvedType {
+
     private ResolvedType bound;
 
     private ResolvedLambdaConstraintType(ResolvedType bound) {
         this.bound = bound;
     }
 
+    /**
+     * The bound is the type the lambda parameter was inferred to, so that is what callers are
+     * shown. Rendering it as {@code "? super " + bound} used to suggest a lower-bounded wildcard,
+     * but no wildcard is involved: when the functional interface method parameter is one,
+     * {@code LambdaExprContext} already stores its bounded type here.
+     */
     @Override
     public String describe() {
-        return "? super " + bound.describe();
+        return bound.describe();
     }
 
     public ResolvedType getBound() {
@@ -47,7 +53,7 @@ public class ResolvedLambdaConstraintType implements ResolvedType {
         return this;
     }
 
-    public static ResolvedLambdaConstraintType bound(ResolvedType bound){
+    public static ResolvedLambdaConstraintType bound(ResolvedType bound) {
         return new ResolvedLambdaConstraintType(bound);
     }
 
@@ -58,8 +64,6 @@ public class ResolvedLambdaConstraintType implements ResolvedType {
 
     @Override
     public String toString() {
-        return "LambdaConstraintType{" +
-                "bound=" + bound +
-                '}';
+        return "LambdaConstraintType{" + "bound=" + bound + '}';
     }
 }

@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2007-2010 Júlio Vilmar Gesser.
- * Copyright (C) 2011, 2013-2021 The JavaParser Team.
+ * Copyright (C) 2011, 2013-2026 The JavaParser Team.
  *
  * This file is part of JavaParser.
  *
@@ -18,93 +18,120 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU Lesser General Public License for more details.
  */
-
 package com.github.javaparser.printer.lexicalpreservation;
-
-import java.util.ArrayList;
-import java.util.LinkedList;
-import java.util.List;
 
 import com.github.javaparser.ast.Node;
 import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.type.Type;
-import com.github.javaparser.printer.concretesyntaxmodel.CsmElement;
-import com.github.javaparser.printer.concretesyntaxmodel.CsmIndent;
-import com.github.javaparser.printer.concretesyntaxmodel.CsmMix;
-import com.github.javaparser.printer.concretesyntaxmodel.CsmToken;
-import com.github.javaparser.printer.concretesyntaxmodel.CsmUnindent;
+import com.github.javaparser.printer.concretesyntaxmodel.*;
+import com.github.javaparser.printer.lexicalpreservation.LexicalDifferenceCalculator.CalculatedSyntaxModel;
 import com.github.javaparser.printer.lexicalpreservation.LexicalDifferenceCalculator.CsmChild;
+import java.util.*;
 
 class DifferenceElementCalculator {
-    
+
+    private Map<String, List<DifferenceElement>> cache;
+
     // internally keep track of a node position in a List<CsmElement>
     public static class ChildPositionInfo {
+
         Node node;
+
         Integer position;
+
         ChildPositionInfo(Node node, Integer position) {
             this.node = node;
             this.position = position;
         }
+
         @Override
         public boolean equals(Object other) {
-            if ( other == null || !(other instanceof ChildPositionInfo))
-                return false;
-            ChildPositionInfo cpi = (ChildPositionInfo)other;
-            // verify that the node content and the position are equal 
+            if (other == null || !(other instanceof ChildPositionInfo)) return false;
+            ChildPositionInfo cpi = (ChildPositionInfo) other;
+            // verify that the node content and the position are equal
             // because we can have nodes with the same content but in different lines
             // in this case we consider that nodes are not equals
-            return this.node.equals(cpi.node) 
-                    && this.node.getRange().isPresent() && cpi.node.getRange().isPresent()
-                    && this.node.getRange().get().contains(cpi.node.getRange().get());
+            // If the nodes have no declared position they are considered equal.
+            return this.node.equals(cpi.node)
+                    && (this.node.hasRange() == false && cpi.node.hasRange() == false
+                            || (this.node.hasRange()
+                                    && cpi.node.hasRange()
+                                    && this.node
+                                            .getRange()
+                                            .get()
+                                            .contains(cpi.node.getRange().get())));
         }
+
         @Override
         public int hashCode() {
             return node.hashCode() + position.hashCode();
         }
     }
-    
+
     static boolean matching(CsmElement a, CsmElement b) {
         if (a instanceof CsmChild) {
             if (b instanceof CsmChild) {
                 CsmChild childA = (CsmChild) a;
                 CsmChild childB = (CsmChild) b;
                 return childA.getChild().equals(childB.getChild());
-            } else if (b instanceof CsmToken) {
-                return false;
-            } else if (b instanceof CsmIndent) {
-                return false;
-            } else if (b instanceof CsmUnindent) {
-                return false;
-            } else {
-                throw new UnsupportedOperationException(a.getClass().getSimpleName()+ " "+b.getClass().getSimpleName());
             }
-        } else if (a instanceof CsmToken) {
+            if (b instanceof CsmToken) {
+                return false;
+            }
+            if (b instanceof CsmIndent) {
+                return false;
+            }
+            if (b instanceof CsmUnindent) {
+                return false;
+            }
+            throw new UnsupportedOperationException(
+                    a.getClass().getSimpleName() + " " + b.getClass().getSimpleName());
+        }
+        if (a instanceof CsmToken) {
             if (b instanceof CsmToken) {
                 // fix #2382:
                 // Tokens are described by their type AND their content
                 // and TokenContentCalculator. By using .equals(), all
                 // three values are compared.
-                CsmToken childA = (CsmToken)a;
-                CsmToken childB = (CsmToken)b;
+                CsmToken childA = (CsmToken) a;
+                CsmToken childB = (CsmToken) b;
                 return childA.equals(childB);
-            } else if (b instanceof CsmChild) {
-                return false;
-            } else if (b instanceof CsmIndent) {
-                return false;
-            } else if (b instanceof CsmUnindent) {
-                return false;
-            } else {
-                throw new UnsupportedOperationException(a.getClass().getSimpleName()+ " "+b.getClass().getSimpleName());
             }
-        } else if (a instanceof CsmIndent) {
+            if (b instanceof CsmChild) {
+                return false;
+            }
+            if (b instanceof CsmIndent) {
+                return false;
+            }
+            if (b instanceof CsmUnindent) {
+                return false;
+            }
+            throw new UnsupportedOperationException(
+                    a.getClass().getSimpleName() + " " + b.getClass().getSimpleName());
+        }
+        if (a instanceof CsmIndent) {
             return b instanceof CsmIndent;
-        } else if (a instanceof CsmUnindent) {
+        }
+        if (a instanceof CsmUnindent) {
             return b instanceof CsmUnindent;
         }
-        throw new UnsupportedOperationException(a.getClass().getSimpleName()+ " "+b.getClass().getSimpleName());
+        throw new UnsupportedOperationException(
+                a.getClass().getSimpleName() + " " + b.getClass().getSimpleName());
     }
 
-    private static boolean replacement(CsmElement a, CsmElement b) {
+    /**
+     * Remove from the difference all the elements related to indentation.
+     * This is mainly intended for test purposes.
+     */
+    static void removeIndentationElements(List<DifferenceElement> elements) {
+        elements.removeIf(el -> el.getElement() instanceof CsmIndent || el.getElement() instanceof CsmUnindent);
+    }
+
+    public DifferenceElementCalculator() {
+        cache = new HashMap<>();
+    }
+
+    private boolean replacement(CsmElement a, CsmElement b) {
         if (a instanceof CsmIndent || b instanceof CsmIndent || a instanceof CsmUnindent || b instanceof CsmUnindent) {
             return false;
         }
@@ -113,32 +140,37 @@ class DifferenceElementCalculator {
                 CsmChild childA = (CsmChild) a;
                 CsmChild childB = (CsmChild) b;
                 return childA.getChild().getClass().equals(childB.getChild().getClass());
-            } else if (b instanceof CsmToken) {
-                return false;
-            } else {
-                throw new UnsupportedOperationException(a.getClass().getSimpleName()+ " "+b.getClass().getSimpleName());
             }
-        } else if (a instanceof CsmToken) {
             if (b instanceof CsmToken) {
-                CsmToken childA = (CsmToken)a;
-                CsmToken childB = (CsmToken)b;
+                return false;
+            }
+            throw new UnsupportedOperationException(
+                    a.getClass().getSimpleName() + " " + b.getClass().getSimpleName());
+        }
+        if (a instanceof CsmToken) {
+            if (b instanceof CsmToken) {
+                CsmToken childA = (CsmToken) a;
+                CsmToken childB = (CsmToken) b;
                 return childA.getTokenType() == childB.getTokenType();
-            } else if (b instanceof CsmChild) {
+            }
+            if (b instanceof CsmChild) {
                 return false;
             }
         }
-        throw new UnsupportedOperationException(a.getClass().getSimpleName()+ " "+b.getClass().getSimpleName());
+        throw new UnsupportedOperationException(
+                a.getClass().getSimpleName() + " " + b.getClass().getSimpleName());
     }
 
     /**
      * Find the positions of all the given children.
      */
-    private static List<ChildPositionInfo> findChildrenPositions(LexicalDifferenceCalculator.CalculatedSyntaxModel calculatedSyntaxModel) {
+    private List<ChildPositionInfo> findChildrenPositions(
+            LexicalDifferenceCalculator.CalculatedSyntaxModel calculatedSyntaxModel) {
         List<ChildPositionInfo> positions = new ArrayList<>();
-        for (int i=0;i<calculatedSyntaxModel.elements.size();i++) {
+        for (int i = 0; i < calculatedSyntaxModel.elements.size(); i++) {
             CsmElement element = calculatedSyntaxModel.elements.get(i);
             if (element instanceof CsmChild) {
-                positions.add(new ChildPositionInfo(((CsmChild)element).getChild(), i));
+                positions.add(new ChildPositionInfo(((CsmChild) element).getChild(), i));
             }
         }
         return positions;
@@ -148,52 +180,100 @@ class DifferenceElementCalculator {
      * Calculate the Difference between two CalculatedSyntaxModel elements, determining which elements were kept,
      * which were added and which were removed.
      */
-    static List<DifferenceElement> calculate(LexicalDifferenceCalculator.CalculatedSyntaxModel original, LexicalDifferenceCalculator.CalculatedSyntaxModel after) {
+    List<DifferenceElement> calculate(
+            LexicalDifferenceCalculator.CalculatedSyntaxModel original,
+            LexicalDifferenceCalculator.CalculatedSyntaxModel after) {
         // For performance reasons we use the positions of matching children
         // to guide the calculation of the difference
         //
         // Suppose we have:
-        //   qwerty[A]uiop
-        //   qwer[A]uiop
+        // qwerty[A]uiop
+        // qwer[A]uiop
         //
         // with [A] being a child and lowercase letters being tokens
         //
         // We would calculate the Difference between "qwerty" and "qwer" then we know the A is kept, and then we
         // would calculate the difference between "uiop" and "uiop"
-
         List<ChildPositionInfo> childrenInOriginal = findChildrenPositions(original);
         List<ChildPositionInfo> childrenInAfter = findChildrenPositions(after);
-
         List<ChildPositionInfo> commonChildren = new ArrayList<>(childrenInOriginal);
         commonChildren.retainAll(childrenInAfter);
-
         List<DifferenceElement> elements = new LinkedList<>();
-
         int originalIndex = 0;
         int afterIndex = 0;
         int commonChildrenIndex = 0;
+        // undefined
+        int posOfNextChildInOriginal = -1;
+        // undefined
+        int posOfNextChildInAfter = -1;
+        // The algorithm is based on common child elements.
+        // It first analyzes the elements preceding this child.
+        // Then it keeps the common element and continues the analysis between the element
+        // following this child and the common element in the list.
         while (commonChildrenIndex < commonChildren.size()) {
             ChildPositionInfo child = commonChildren.get(commonChildrenIndex++);
             // search the position of the node "child" in the original list of cms element
-            int posOfNextChildInOriginal = childrenInOriginal.stream().filter(i->i.equals(child)).map(i->i.position).findFirst().get();
+            final int currentPosOfNextChildInOriginal = posOfNextChildInOriginal;
+            final int currentPosOfNextChildInAfter = posOfNextChildInAfter;
+            posOfNextChildInOriginal = childrenInOriginal.stream()
+                    .filter(i -> i.equals(child))
+                    .map(i -> i.position)
+                    .filter(position -> position > currentPosOfNextChildInOriginal)
+                    .findFirst()
+                    .orElse(posOfNextChildInOriginal);
             // search the position of the node "child" in the modified list of cms element
-            int posOfNextChildInAfter    = childrenInAfter.stream().filter(i->i.equals(child)).map(i->i.position).findFirst().get();
-            
+            posOfNextChildInAfter = childrenInAfter.stream()
+                    .filter(i -> i.equals(child))
+                    .map(i -> i.position)
+                    .filter(position -> position > currentPosOfNextChildInAfter)
+                    .findFirst()
+                    .orElse(posOfNextChildInAfter);
+            // Imagine that the common elements has been moved, for example in the case where the parameters of a method
+            // are reversed
+            // In this case the afterIndex will be greater than the position of the child in
+            // the list
+            // For example : if {@code new Foo(a, b)} become {@code new Foo(b, a)}
+            // Nota: in this example there is 3 child elements Foo, 'a' and 'b', others are tokens
+            // In the orginal list the child element 'a' is at the position 5 and the
+            // element 'b' is at the position 8
+            // After reverting the list of parameters the child element 'a' is at the
+            // position 8 and the element 'b' is at the position 5
+            // When we deal with element 'b', it is in 5th position in the list after the
+            // modification but the previous position in the list was that of element 'a'.
             if (originalIndex < posOfNextChildInOriginal || afterIndex < posOfNextChildInAfter) {
-                elements.addAll(calculateImpl(original.sub(originalIndex, posOfNextChildInOriginal), after.sub(afterIndex, posOfNextChildInAfter)));
+                // defines the sublist of elements located before the common element
+                CalculatedSyntaxModel originalSub = originalIndex < posOfNextChildInOriginal
+                        ? original.sub(originalIndex, posOfNextChildInOriginal)
+                        : new CalculatedSyntaxModel(Collections.EMPTY_LIST);
+                CalculatedSyntaxModel afterSub = afterIndex < posOfNextChildInAfter
+                        ? after.sub(afterIndex, posOfNextChildInAfter)
+                        : new CalculatedSyntaxModel(Collections.EMPTY_LIST);
+                elements.addAll(calculateImpl(originalSub, afterSub));
             }
-            elements.add(new Kept(new CsmChild(child.node)));
-            originalIndex = posOfNextChildInOriginal + 1;
-            afterIndex = posOfNextChildInAfter + 1;
+            if (afterIndex <= posOfNextChildInAfter) {
+                // we need to keep the current common node
+                elements.add(new Kept(new CsmChild(child.node)));
+            } else {
+                // In this case the current node was not found in the list after change
+                // so we need to remove it.
+                elements.add(new Removed(new CsmChild(child.node)));
+            }
+            originalIndex = originalIndex <= posOfNextChildInOriginal ? posOfNextChildInOriginal + 1 : originalIndex;
+            afterIndex = afterIndex <= posOfNextChildInAfter ? posOfNextChildInAfter + 1 : afterIndex;
         }
-
         if (originalIndex < original.elements.size() || afterIndex < after.elements.size()) {
-            elements.addAll(calculateImpl(original.sub(originalIndex, original.elements.size()), after.sub(afterIndex, after.elements.size())));
+            CalculatedSyntaxModel originalSub = originalIndex < original.elements.size()
+                    ? original.sub(originalIndex, original.elements.size())
+                    : new CalculatedSyntaxModel(Collections.EMPTY_LIST);
+            CalculatedSyntaxModel afterSub = afterIndex < after.elements.size()
+                    ? after.sub(afterIndex, after.elements.size())
+                    : new CalculatedSyntaxModel(Collections.EMPTY_LIST);
+            elements.addAll(calculateImpl(originalSub, afterSub));
         }
         return elements;
     }
 
-    private static void considerRemoval(NodeText nodeTextForChild, List<DifferenceElement> elements) {
+    private void considerRemoval(NodeText nodeTextForChild, List<DifferenceElement> elements) {
         for (TextElement el : nodeTextForChild.getElements()) {
             if (el instanceof ChildTextElement) {
                 ChildTextElement cte = (ChildTextElement) el;
@@ -207,12 +287,13 @@ class DifferenceElementCalculator {
         }
     }
 
-    private static int considerRemoval(CsmElement removedElement, int originalIndex, List<DifferenceElement> elements) {
+    private int considerRemoval(CsmElement removedElement, int originalIndex, List<DifferenceElement> elements) {
         boolean dealtWith = false;
         if (removedElement instanceof CsmChild) {
             CsmChild removedChild = (CsmChild) removedElement;
-            if (removedChild.getChild() instanceof Type && removedChild.getChild().getParentNode().isPresent() &&
-                    removedChild.getChild().getParentNode().get() instanceof VariableDeclarator) {
+            if (removedChild.getChild() instanceof Type
+                    && removedChild.getChild().getParentNode().isPresent()
+                    && removedChild.getChild().getParentNode().get() instanceof VariableDeclarator) {
                 NodeText nodeTextForChild = LexicalPreservingPrinter.getOrCreateNodeText(removedChild.getChild());
                 considerRemoval(nodeTextForChild, elements);
                 originalIndex++;
@@ -226,52 +307,81 @@ class DifferenceElementCalculator {
         return originalIndex;
     }
 
-    private static List<DifferenceElement> calculateImpl(LexicalDifferenceCalculator.CalculatedSyntaxModel original,
-                                                         LexicalDifferenceCalculator.CalculatedSyntaxModel after) {
-        List<DifferenceElement> elements = new LinkedList<>();
+    private List<DifferenceElement> calculateImpl(
+            LexicalDifferenceCalculator.CalculatedSyntaxModel original,
+            LexicalDifferenceCalculator.CalculatedSyntaxModel after) {
+        String key = original.hashCode() + "-" + after.hashCode();
+        if (cache.containsKey(key)) {
+            return cache.get(key);
+        }
+        List<DifferenceElement> result = calculateImpl2(original, after);
+        cache.put(key, result);
+        return result;
+    }
 
+    private List<DifferenceElement> calculateImpl2(
+            LexicalDifferenceCalculator.CalculatedSyntaxModel original,
+            LexicalDifferenceCalculator.CalculatedSyntaxModel after) {
+        // This list will hold the final differences between the two models.
+        List<DifferenceElement> elements = new LinkedList<>();
+        // Pointers to traverse both sequences (before and after).
         int originalIndex = 0;
         int afterIndex = 0;
-
         // We move through the two CalculatedSyntaxModel, moving both forward when we have a match
         // and moving just one side forward when we have an element kept or removed
-
         do {
+            // elements remain only in the original sequence everything left must be marked as removed.
             if (originalIndex < original.elements.size() && afterIndex >= after.elements.size()) {
                 CsmElement removedElement = original.elements.get(originalIndex);
                 originalIndex = considerRemoval(removedElement, originalIndex, elements);
+                // elements remain only in the "after" sequence everything left must be marked as added.
             } else if (originalIndex >= original.elements.size() && afterIndex < after.elements.size()) {
                 elements.add(new Added(after.elements.get(afterIndex)));
                 afterIndex++;
             } else {
                 CsmElement nextOriginal = original.elements.get(originalIndex);
                 CsmElement nextAfter = after.elements.get(afterIndex);
-
                 if ((nextOriginal instanceof CsmMix) && (nextAfter instanceof CsmMix)) {
+                    // If sub-elements are identical, mark everything as kept
                     if (((CsmMix) nextAfter).getElements().equals(((CsmMix) nextOriginal).getElements())) {
                         // No reason to deal with a reshuffled, we are just going to keep everything as it is
                         ((CsmMix) nextAfter).getElements().forEach(el -> elements.add(new Kept(el)));
                     } else {
-                        elements.add(new Reshuffled((CsmMix)nextOriginal, (CsmMix)nextAfter));
+                        // Otherwise, same type but with shuffled/reorganized content
+                        elements.add(new Reshuffled((CsmMix) nextOriginal, (CsmMix) nextAfter));
                     }
                     originalIndex++;
                     afterIndex++;
                 } else if (matching(nextOriginal, nextAfter)) {
-                    elements.add(new Kept(nextOriginal));
-                    originalIndex++;
-                    afterIndex++;
+                    // The two elements match according to a custom "matching" rule.
+                    // They are normally kept, unless the original element is a token that is better removed together
+                    // with the child node removed just before it (see removeWithPrecedingRemovedChild).
+                    if (removeWithPrecedingRemovedChild(elements, original, originalIndex, after, afterIndex)) {
+                        elements.add(new Removed(nextOriginal));
+                        originalIndex++;
+                    } else {
+                        elements.add(new Kept(nextOriginal));
+                        originalIndex++;
+                        afterIndex++;
+                    }
                 } else if (replacement(nextOriginal, nextAfter)) {
+                    // The two elements represent a replacement: remove the old one and add the new one.
                     originalIndex = considerRemoval(nextOriginal, originalIndex, elements);
                     elements.add(new Added(nextAfter));
                     afterIndex++;
+                    // Ambiguous case: it could be either an addition or a removal.
                 } else {
                     // We can try to remove the element or add it and look which one leads to the lower difference
-                    List<DifferenceElement> addingElements = calculate(original.from(originalIndex), after.from(afterIndex + 1));
+                    // Try hypothesis A: treat "nextAfter" as an addition
+                    List<DifferenceElement> addingElements =
+                            calculate(original.from(originalIndex), after.from(afterIndex + 1));
+                    long costAddingElements = cost(addingElements);
+                    // Try hypothesis B: treat "nextOriginal" as a removal
                     List<DifferenceElement> removingElements = null;
-                    if (cost(addingElements) > 0) {
+                    if (costAddingElements > 0) {
                         removingElements = calculate(original.from(originalIndex + 1), after.from(afterIndex));
                     }
-
+                    // Choose the cheaper option based on cost.
                     if (removingElements == null || cost(removingElements) > cost(addingElements)) {
                         elements.add(new Added(nextAfter));
                         afterIndex++;
@@ -282,20 +392,67 @@ class DifferenceElementCalculator {
                 }
             }
         } while (originalIndex < original.elements.size() || afterIndex < after.elements.size());
-
         return elements;
     }
 
-    private static long cost(List<DifferenceElement> elements) {
-        return elements.stream().filter(e -> !(e instanceof Kept)).count();
+    /*
+     * Decides whether a token of the original model, which matches the next token of the modified model and could
+     * therefore be kept, should rather be removed together with the child node removed just before it.
+     *
+     * Why: the difference is computed on the concrete syntax model (CSM), but it is applied to the actual source
+     * text, which may not have exactly the tokens the CSM expects (the lexical preserving printer exists precisely
+     * to respect the formatting of the source). When several tokens are identical, typically end of lines, several
+     * alignments have the same cost on the CSM. For example, removing the last import "b" of
+     *
+     *   original: [a] eol [b] eol eol [class]   (the CSM prints a blank line between the imports and the type)
+     *   after:    [a] eol eol [class]
+     *
+     * the tokens between [a] and [class] can be aligned in two ways, both removing [b] and one end of line:
+     *
+     *   1. kept(eol) removed(b) kept(eol) removed(eol)   (the removed end of line is separated from [b])
+     *   2. kept(eol) removed(b) removed(eol) kept(eol)   (the removed end of line follows [b])
+     *
+     * Aligning greedily from the left gives the first one. It is correct on the CSM, but not on the actual text: if
+     * the source has no blank line before the type, the removed end of line designates a token that does not exist
+     * and the separator of [b] is left over (a blank line appears); if it has several blank lines, one of them is
+     * removed instead of the separator of [b]. Only the second alignment, which removes the element with the token
+     * that follows it, stays correct whatever the number of end of lines in the source.
+     *
+     * Rule: the token is removed instead of being kept when
+     * - the difference computed so far ends with the removal of a child node, possibly followed by the removal of
+     *   other tokens (so that a separator made of several tokens is removed as a whole), and
+     * - removing the token does not increase the cost of the whole difference, i.e. this is just a choice between
+     *   alignments of the same cost.
+     */
+    private boolean removeWithPrecedingRemovedChild(
+            List<DifferenceElement> elements,
+            LexicalDifferenceCalculator.CalculatedSyntaxModel original,
+            int originalIndex,
+            LexicalDifferenceCalculator.CalculatedSyntaxModel after,
+            int afterIndex) {
+        if (!(original.elements.get(originalIndex) instanceof CsmToken)) {
+            return false;
+        }
+        // Look backwards over the tokens already removed: the first other element must be a removed child node.
+        int index = elements.size() - 1;
+        while (index >= 0
+                && elements.get(index).isRemoved()
+                && !elements.get(index).isChild()) {
+            index--;
+        }
+        if (index < 0
+                || !elements.get(index).isRemoved()
+                || !elements.get(index).isChild()) {
+            return false;
+        }
+        // Cost of the rest of the difference in both cases: the kept token costs nothing, the removed token costs one
+        // and the token of the modified model still has to be matched afterwards.
+        long costIfKept = cost(calculate(original.from(originalIndex + 1), after.from(afterIndex + 1)));
+        long costIfRemoved = 1 + cost(calculate(original.from(originalIndex + 1), after.from(afterIndex)));
+        return costIfRemoved <= costIfKept;
     }
 
-
-    /**
-     * Remove from the difference all the elements related to indentation.
-     * This is mainly intended for test purposes.
-     */
-    static void removeIndentationElements(List<DifferenceElement> elements) {
-        elements.removeIf(el -> el.getElement() instanceof CsmIndent || el.getElement() instanceof CsmUnindent);
+    private long cost(List<DifferenceElement> elements) {
+        return elements.stream().filter(e -> !(e instanceof Kept)).count();
     }
 }

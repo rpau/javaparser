@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2007-2010 Júlio Vilmar Gesser.
- * Copyright (C) 2011, 2013-2021 The JavaParser Team.
+ * Copyright (C) 2011, 2013-2026 The JavaParser Team.
  *
  * This file is part of JavaParser.
  *
@@ -18,8 +18,14 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU Lesser General Public License for more details.
  */
-
 package com.github.javaparser;
+
+import static com.github.javaparser.ParseStart.*;
+import static com.github.javaparser.Problem.PROBLEM_BY_BEGIN_POSITION;
+import static com.github.javaparser.Providers.provider;
+import static com.github.javaparser.Providers.resourceProvider;
+import static com.github.javaparser.utils.Utils.assertNotNull;
+import static java.util.stream.Collectors.toList;
 
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.ImportDeclaration;
@@ -38,15 +44,11 @@ import com.github.javaparser.ast.stmt.Statement;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.ast.type.TypeParameter;
-
 import java.io.*;
 import java.nio.charset.Charset;
 import java.nio.file.Path;
-
-import static com.github.javaparser.ParseStart.*;
-import static com.github.javaparser.Problem.PROBLEM_BY_BEGIN_POSITION;
-import static com.github.javaparser.Providers.*;
-import static com.github.javaparser.utils.Utils.assertNotNull;
+import java.util.List;
+import java.util.function.Supplier;
 
 /**
  * Parse Java source code and creates Abstract Syntax Trees.
@@ -55,6 +57,7 @@ import static com.github.javaparser.utils.Utils.assertNotNull;
  * @see StaticJavaParser
  */
 public final class JavaParser {
+
     private final ParserConfiguration configuration;
 
     private GeneratedJavaParser astParser = null;
@@ -90,10 +93,9 @@ public final class JavaParser {
         }
         astParser.setTabSize(configuration.getTabSize());
         astParser.setStoreTokens(configuration.isStoreTokens());
-
         ParserConfiguration.LanguageLevel languageLevel = configuration.getLanguageLevel();
         if (languageLevel != null) {
-            if(languageLevel.isYieldSupported()) {
+            if (languageLevel.isYieldSupported()) {
                 astParser.setYieldSupported();
             }
         }
@@ -113,22 +115,19 @@ public final class JavaParser {
     public <N extends Node> ParseResult<N> parse(ParseStart<N> start, Provider provider) {
         assertNotNull(start);
         assertNotNull(provider);
-
-        for (PreProcessor preProcessor : configuration.getPreProcessors()) {
-            provider = preProcessor.process(provider);
+        List<Processor> processors =
+                configuration.getProcessors().stream().map(Supplier::get).collect(toList());
+        for (Processor processor : processors) {
+            provider = processor.preProcess(provider);
         }
-
         final GeneratedJavaParser parser = getParserForProvider(provider);
         try {
             N resultNode = start.parse(parser);
             ParseResult<N> result = new ParseResult<>(resultNode, parser.problems, parser.getCommentsCollection());
-
-            configuration.getPostProcessors()
-                    .forEach(postProcessor -> postProcessor.process(result, configuration));
-
-            result.getProblems()
-                    .sort(PROBLEM_BY_BEGIN_POSITION);
-
+            for (Processor processor : processors) {
+                processor.postProcess(result, configuration);
+            }
+            result.getProblems().sort(PROBLEM_BY_BEGIN_POSITION);
             return result;
         } catch (Exception e) {
             final String message = e.getMessage() == null ? "Unknown error" : e.getMessage();
@@ -150,7 +149,6 @@ public final class JavaParser {
      * @param in {@link InputStream} containing Java source code. It will be closed after parsing.
      * @param encoding encoding of the source code
      * @return CompilationUnit representing the Java source code
-     * @throws ParseProblemException if the source code has parser errors
      */
     public ParseResult<CompilationUnit> parse(final InputStream in, Charset encoding) {
         return parse(COMPILATION_UNIT, provider(in, encoding));
@@ -162,7 +160,6 @@ public final class JavaParser {
      *
      * @param in {@link InputStream} containing Java source code. It will be closed after parsing.
      * @return CompilationUnit representing the Java source code
-     * @throws ParseProblemException if the source code has parser errors
      */
     public ParseResult<CompilationUnit> parse(final InputStream in) {
         return parse(in, configuration.getCharacterEncoding());
@@ -175,7 +172,6 @@ public final class JavaParser {
      * @param file {@link File} containing Java source code. It will be closed after parsing.
      * @param encoding encoding of the source code
      * @return CompilationUnit representing the Java source code
-     * @throws ParseProblemException if the source code has parser errors
      * @throws FileNotFoundException the file was not found
      * @deprecated set the encoding in the {@link ParserConfiguration}
      */
@@ -192,11 +188,11 @@ public final class JavaParser {
      *
      * @param file {@link File} containing Java source code. It will be closed after parsing.
      * @return CompilationUnit representing the Java source code
-     * @throws ParseProblemException if the source code has parser errors
      * @throws FileNotFoundException the file was not found
      */
     public ParseResult<CompilationUnit> parse(final File file) throws FileNotFoundException {
-        ParseResult<CompilationUnit> result = parse(COMPILATION_UNIT, provider(file, configuration.getCharacterEncoding()));
+        ParseResult<CompilationUnit> result =
+                parse(COMPILATION_UNIT, provider(file, configuration.getCharacterEncoding()));
         result.getResult().ifPresent(cu -> cu.setStorage(file.toPath(), configuration.getCharacterEncoding()));
         return result;
     }
@@ -209,7 +205,6 @@ public final class JavaParser {
      * @param encoding encoding of the source code
      * @return CompilationUnit representing the Java source code
      * @throws IOException the path could not be accessed
-     * @throws ParseProblemException if the source code has parser errors
      * @deprecated set the encoding in the {@link ParserConfiguration}
      */
     @Deprecated
@@ -225,11 +220,12 @@ public final class JavaParser {
      *
      * @param path path to a file containing Java source code
      * @return CompilationUnit representing the Java source code
-     * @throws ParseProblemException if the source code has parser errors
      * @throws IOException the path could not be accessed
      */
     public ParseResult<CompilationUnit> parse(final Path path) throws IOException {
-        ParseResult<CompilationUnit> result = parse(COMPILATION_UNIT, provider(path, configuration.getCharacterEncoding()));
+        ParseResult<CompilationUnit> result =
+                parse(COMPILATION_UNIT, provider(path, configuration.getCharacterEncoding()));
+        result.setSourcePath(path);
         result.getResult().ifPresent(cu -> cu.setStorage(path, configuration.getCharacterEncoding()));
         return result;
     }
@@ -241,7 +237,6 @@ public final class JavaParser {
      * @param path path to a resource containing Java source code. As resource is accessed through a class loader, a
      * leading "/" is not allowed in pathToResource
      * @return CompilationUnit representing the Java source code
-     * @throws ParseProblemException if the source code has parser errors
      * @throws IOException the path could not be accessed
      */
     public ParseResult<CompilationUnit> parseResource(final String path) throws IOException {
@@ -256,7 +251,6 @@ public final class JavaParser {
      * leading "/" is not allowed in pathToResource
      * @param encoding encoding of the source code
      * @return CompilationUnit representing the Java source code
-     * @throws ParseProblemException if the source code has parser errors
      * @throws IOException the path could not be accessed
      * @deprecated set the encoding in the {@link ParserConfiguration}
      */
@@ -273,12 +267,12 @@ public final class JavaParser {
      * @param path path to a resource containing Java source code. As resource is accessed through a class loader, a
      * leading "/" is not allowed in pathToResource
      * @return CompilationUnit representing the Java source code
-     * @throws ParseProblemException if the source code has parser errors
      * @throws IOException the path could not be accessed
      * @deprecated set the encoding in the {@link ParserConfiguration}
      */
     @Deprecated
-    public ParseResult<CompilationUnit> parseResource(final ClassLoader classLoader, final String path, Charset encoding) throws IOException {
+    public ParseResult<CompilationUnit> parseResource(
+            final ClassLoader classLoader, final String path, Charset encoding) throws IOException {
         return parse(COMPILATION_UNIT, resourceProvider(classLoader, path, encoding));
     }
 
@@ -288,7 +282,6 @@ public final class JavaParser {
      *
      * @param reader the reader containing Java source code. It will be closed after parsing.
      * @return CompilationUnit representing the Java source code
-     * @throws ParseProblemException if the source code has parser errors
      */
     public ParseResult<CompilationUnit> parse(final Reader reader) {
         return parse(COMPILATION_UNIT, provider(reader));
@@ -300,7 +293,6 @@ public final class JavaParser {
      *
      * @param code Java source code
      * @return CompilationUnit representing the Java source code
-     * @throws ParseProblemException if the source code has parser errors
      */
     public ParseResult<CompilationUnit> parse(String code) {
         return parse(COMPILATION_UNIT, provider(code));
@@ -312,7 +304,6 @@ public final class JavaParser {
      *
      * @param blockStatement {@link String} containing Java block code
      * @return BlockStmt representing the Java block
-     * @throws ParseProblemException if the source code has parser errors
      */
     public ParseResult<BlockStmt> parseBlock(final String blockStatement) {
         return parse(BLOCK, provider(blockStatement));
@@ -324,7 +315,6 @@ public final class JavaParser {
      *
      * @param statement {@link String} containing Java statement code
      * @return Statement representing the Java statement
-     * @throws ParseProblemException if the source code has parser errors
      */
     public ParseResult<Statement> parseStatement(final String statement) {
         return parse(STATEMENT, provider(statement));
@@ -336,7 +326,6 @@ public final class JavaParser {
      *
      * @param importDeclaration {@link String} containing Java import code
      * @return ImportDeclaration representing the Java import declaration
-     * @throws ParseProblemException if the source code has parser errors
      */
     public ParseResult<ImportDeclaration> parseImport(final String importDeclaration) {
         return parse(IMPORT_DECLARATION, provider(importDeclaration));
@@ -348,7 +337,6 @@ public final class JavaParser {
      *
      * @param expression {@link String} containing Java expression
      * @return Expression representing the Java expression
-     * @throws ParseProblemException if the source code has parser errors
      */
     @SuppressWarnings("unchecked")
     public <T extends Expression> ParseResult<T> parseExpression(final String expression) {
@@ -361,7 +349,6 @@ public final class JavaParser {
      *
      * @param annotation {@link String} containing Java annotation
      * @return AnnotationExpr representing the Java annotation
-     * @throws ParseProblemException if the source code has parser errors
      */
     public ParseResult<AnnotationExpr> parseAnnotation(final String annotation) {
         return parse(ANNOTATION, provider(annotation));
@@ -373,7 +360,6 @@ public final class JavaParser {
      *
      * @param body {@link String} containing Java body declaration
      * @return BodyDeclaration representing the Java annotation
-     * @throws ParseProblemException if the source code has parser errors
      */
     public ParseResult<BodyDeclaration<?>> parseAnnotationBodyDeclaration(final String body) {
         return parse(ANNOTATION_BODY, provider(body));
@@ -385,7 +371,6 @@ public final class JavaParser {
      *
      * @param body the body of a class or interface
      * @return BodyDeclaration representing the Java interface body
-     * @throws ParseProblemException if the source code has parser errors
      */
     @SuppressWarnings("unchecked")
     public <T extends BodyDeclaration<?>> ParseResult<T> parseBodyDeclaration(String body) {
@@ -397,7 +382,6 @@ public final class JavaParser {
      *
      * @param type the type name like a.b.c.X or Y
      * @return ClassOrInterfaceType representing the type
-     * @throws ParseProblemException if the source code has parser errors
      */
     public ParseResult<ClassOrInterfaceType> parseClassOrInterfaceType(String type) {
         return parse(CLASS_OR_INTERFACE_TYPE, provider(type));
@@ -408,7 +392,6 @@ public final class JavaParser {
      *
      * @param type the type name like a.b.c.X, Y, or int
      * @return ClassOrInterfaceType representing the type
-     * @throws ParseProblemException if the source code has parser errors
      */
     public ParseResult<Type> parseType(String type) {
         return parse(TYPE, provider(type));
@@ -420,7 +403,6 @@ public final class JavaParser {
      *
      * @param declaration a variable declaration like {@code int x=2;}
      * @return VariableDeclarationExpr representing the type
-     * @throws ParseProblemException if the source code has parser errors
      */
     public ParseResult<VariableDeclarationExpr> parseVariableDeclarationExpr(String declaration) {
         return parse(VARIABLE_DECLARATION_EXPR, provider(declaration));
@@ -431,7 +413,6 @@ public final class JavaParser {
      *
      * @param statement a statement like super("hello");
      * @return the AST for the statement.
-     * @throws ParseProblemException if the source code has parser errors
      */
     public ParseResult<ExplicitConstructorInvocationStmt> parseExplicitConstructorInvocationStmt(String statement) {
         return parse(EXPLICIT_CONSTRUCTOR_INVOCATION_STMT, provider(statement));
@@ -442,7 +423,6 @@ public final class JavaParser {
      *
      * @param qualifiedName a name like "com.laamella.parameter_source"
      * @return the AST for the name
-     * @throws ParseProblemException if the source code has parser errors
      */
     public ParseResult<Name> parseName(String qualifiedName) {
         return parse(NAME, provider(qualifiedName));
@@ -453,7 +433,6 @@ public final class JavaParser {
      *
      * @param name a name like "parameter_source"
      * @return the AST for the name
-     * @throws ParseProblemException if the source code has parser errors
      */
     public ParseResult<SimpleName> parseSimpleName(String name) {
         return parse(SIMPLE_NAME, provider(name));
@@ -464,7 +443,6 @@ public final class JavaParser {
      *
      * @param parameter a parameter like "int[] x"
      * @return the AST for the parameter
-     * @throws ParseProblemException if the source code has parser errors
      */
     public ParseResult<Parameter> parseParameter(String parameter) {
         return parse(PARAMETER, provider(parameter));
@@ -475,7 +453,6 @@ public final class JavaParser {
      *
      * @param packageDeclaration a declaration like "package com.microsoft.java;"
      * @return the AST for the parameter
-     * @throws ParseProblemException if the source code has parser errors
      */
     public ParseResult<PackageDeclaration> parsePackageDeclaration(String packageDeclaration) {
         return parse(PACKAGE_DECLARATION, provider(packageDeclaration));
@@ -486,7 +463,6 @@ public final class JavaParser {
      *
      * @param typeDeclaration a declaration like "class X {}"
      * @return the AST for the type declaration
-     * @throws ParseProblemException if the source code has parser errors
      */
     public ParseResult<TypeDeclaration<?>> parseTypeDeclaration(String typeDeclaration) {
         return parse(TYPE_DECLARATION, provider(typeDeclaration));
@@ -497,7 +473,6 @@ public final class JavaParser {
      *
      * @param moduleDeclaration a declaration like "module X {}"
      * @return the AST for the module declaration
-     * @throws ParseProblemException if the source code has parser errors
      * @see ModuleDeclaration
      */
     public ParseResult<ModuleDeclaration> parseModuleDeclaration(String moduleDeclaration) {
@@ -509,20 +484,17 @@ public final class JavaParser {
      *
      * @param moduleDirective a directive like "opens C;"
      * @return the AST for the module directive
-     * @throws ParseProblemException if the source code has parser errors
      * @see ModuleDirective
      */
     public ParseResult<ModuleDirective> parseModuleDirective(String moduleDirective) {
         return parse(MODULE_DIRECTIVE, provider(moduleDirective));
     }
 
-
     /**
      * Parses a type parameter and returns it as a TypeParameter
      *
      * @param typeParameter a parameter like "T extends Serializable"
      * @return the AST for the type parameter
-     * @throws ParseProblemException if the source code has parser errors
      */
     public ParseResult<TypeParameter> parseTypeParameter(String typeParameter) {
         return parse(TYPE_PARAMETER, provider(typeParameter));
@@ -533,11 +505,20 @@ public final class JavaParser {
      *
      * @param methodDeclaration a method declaration like "void foo() {}"
      * @return the AST for the method declaration
-     * @throws ParseProblemException if the source code has parser errors
      * @see MethodDeclaration
      */
     public ParseResult<MethodDeclaration> parseMethodDeclaration(String methodDeclaration) {
         return parse(METHOD_DECLARATION, provider(methodDeclaration));
     }
 
+    /**
+     * Parses an array initializer expression and returns it as ArrayInitializerExpr.
+     *
+     * @param arrayInitializerExpr an array initializer like "{1,2,3}"
+     * @return the AST for the array initializer expression
+     * @see ArrayInitializerExpr
+     */
+    public ParseResult<ArrayInitializerExpr> parseArrayInitializerExpr(String arrayInitializerExpr) {
+        return parse(ARRAY_INITIALIZER_EXPR, provider(arrayInitializerExpr));
+    }
 }

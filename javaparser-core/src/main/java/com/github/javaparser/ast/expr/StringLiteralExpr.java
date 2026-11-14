@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2007-2010 Júlio Vilmar Gesser.
- * Copyright (C) 2011, 2013-2021 The JavaParser Team.
+ * Copyright (C) 2011, 2013-2026 The JavaParser Team.
  *
  * This file is part of JavaParser.
  *
@@ -20,10 +20,12 @@
  */
 package com.github.javaparser.ast.expr;
 
+import static com.github.javaparser.utils.StringEscapeUtils.escapeJava;
+import static com.github.javaparser.utils.StringEscapeUtils.unescapeJava;
+
 import com.github.javaparser.TokenRange;
 import com.github.javaparser.ast.AllFieldsConstructor;
 import com.github.javaparser.ast.Generated;
-import com.github.javaparser.ast.Node;
 import com.github.javaparser.ast.visitor.CloneVisitor;
 import com.github.javaparser.ast.visitor.GenericVisitor;
 import com.github.javaparser.ast.visitor.VoidVisitor;
@@ -32,8 +34,6 @@ import com.github.javaparser.metamodel.StringLiteralExprMetaModel;
 import com.github.javaparser.utils.Utils;
 import java.util.Optional;
 import java.util.function.Consumer;
-import static com.github.javaparser.utils.StringEscapeUtils.escapeJava;
-import static com.github.javaparser.utils.StringEscapeUtils.unescapeJava;
 
 /**
  * A literal string.
@@ -82,14 +82,6 @@ public class StringLiteralExpr extends LiteralStringValueExpr {
         v.visit(this, arg);
     }
 
-    @Override
-    @Generated("com.github.javaparser.generator.core.node.RemoveMethodGenerator")
-    public boolean remove(Node node) {
-        if (node == null)
-            return false;
-        return super.remove(node);
-    }
-
     /**
      * Sets the content of this expressions to given value. Escapes EOL characters.
      *
@@ -97,7 +89,7 @@ public class StringLiteralExpr extends LiteralStringValueExpr {
      * @return self
      */
     public StringLiteralExpr setEscapedValue(String value) {
-        this.value = Utils.escapeEndOfLines(value);
+        setValue(Utils.escapeEndOfLines(value));
         return this;
     }
 
@@ -115,7 +107,7 @@ public class StringLiteralExpr extends LiteralStringValueExpr {
      * @return this literal expression
      */
     public StringLiteralExpr setString(String value) {
-        this.value = escapeJava(value);
+        setValue(escapeJava(value));
         return this;
     }
 
@@ -129,14 +121,6 @@ public class StringLiteralExpr extends LiteralStringValueExpr {
     @Generated("com.github.javaparser.generator.core.node.GetMetaModelGenerator")
     public StringLiteralExprMetaModel getMetaModel() {
         return JavaParserMetaModel.stringLiteralExprMetaModel;
-    }
-
-    @Override
-    @Generated("com.github.javaparser.generator.core.node.ReplaceMethodGenerator")
-    public boolean replace(Node node, Node replacementNode) {
-        if (node == null)
-            return false;
-        return super.replace(node, replacementNode);
     }
 
     @Override

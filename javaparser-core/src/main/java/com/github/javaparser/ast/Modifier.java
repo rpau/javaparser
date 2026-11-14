@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2007-2010 Júlio Vilmar Gesser.
- * Copyright (C) 2011, 2013-2021 The JavaParser Team.
+ * Copyright (C) 2011, 2013-2026 The JavaParser Team.
  *
  * This file is part of JavaParser.
  *
@@ -20,6 +20,9 @@
  */
 package com.github.javaparser.ast;
 
+import static com.github.javaparser.ast.NodeList.toNodeList;
+import static com.github.javaparser.utils.Utils.assertNotNull;
+
 import com.github.javaparser.TokenRange;
 import com.github.javaparser.ast.observer.ObservableProperty;
 import com.github.javaparser.ast.visitor.CloneVisitor;
@@ -27,9 +30,8 @@ import com.github.javaparser.ast.visitor.GenericVisitor;
 import com.github.javaparser.ast.visitor.VoidVisitor;
 import com.github.javaparser.metamodel.JavaParserMetaModel;
 import com.github.javaparser.metamodel.ModifierMetaModel;
+import com.github.javaparser.printer.Stringable;
 import java.util.Arrays;
-import static com.github.javaparser.ast.NodeList.toNodeList;
-import static com.github.javaparser.utils.Utils.assertNotNull;
 
 /**
  * A modifier, like private, public, or volatile.
@@ -84,11 +86,18 @@ public class Modifier extends Node {
         return new Modifier(Keyword.TRANSITIVE);
     }
 
+    public static Modifier sealedModifier() {
+        return new Modifier(Keyword.SEALED);
+    }
+
+    public static Modifier nonSealedModifier() {
+        return new Modifier(Keyword.NON_SEALED);
+    }
+
     /**
      * The Java modifier keywords.
      */
-    public enum Keyword {
-
+    public enum Keyword implements Stringable {
         DEFAULT("default"),
         PUBLIC("public"),
         PROTECTED("protected"),
@@ -101,7 +110,9 @@ public class Modifier extends Node {
         SYNCHRONIZED("synchronized"),
         NATIVE("native"),
         STRICTFP("strictfp"),
-        TRANSITIVE("transitive");
+        TRANSITIVE("transitive"),
+        SEALED("sealed"),
+        NON_SEALED("non-sealed");
 
         private final String codeRepresentation;
 
@@ -112,6 +123,7 @@ public class Modifier extends Node {
         /**
          * @return the Java keyword represented by this enum constant.
          */
+        @Override
         public String asString() {
             return codeRepresentation;
         }
@@ -172,22 +184,6 @@ public class Modifier extends Node {
      */
     public static NodeList<Modifier> createModifierList(Modifier.Keyword... modifiers) {
         return Arrays.stream(modifiers).map(Modifier::new).collect(toNodeList());
-    }
-
-    @Override
-    @Generated("com.github.javaparser.generator.core.node.RemoveMethodGenerator")
-    public boolean remove(Node node) {
-        if (node == null)
-            return false;
-        return super.remove(node);
-    }
-
-    @Override
-    @Generated("com.github.javaparser.generator.core.node.ReplaceMethodGenerator")
-    public boolean replace(Node node, Node replacementNode) {
-        if (node == null)
-            return false;
-        return super.replace(node, replacementNode);
     }
 
     @Override

@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2015-2016 Federico Tomassetti
- * Copyright (C) 2017-2020 The JavaParser Team.
+ * Copyright (C) 2017-2026 The JavaParser Team.
  *
  * This file is part of JavaParser.
  *
@@ -21,24 +21,21 @@
 
 package com.github.javaparser.symbolsolver.javaparsermodel.contexts;
 
-import java.util.Collections;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Optional;
-
 import com.github.javaparser.ast.Node;
 import com.github.javaparser.ast.body.VariableDeclarator;
+import com.github.javaparser.ast.expr.TypePatternExpr;
 import com.github.javaparser.ast.expr.VariableDeclarationExpr;
 import com.github.javaparser.ast.stmt.BlockStmt;
 import com.github.javaparser.ast.stmt.ExpressionStmt;
 import com.github.javaparser.ast.stmt.Statement;
-import com.github.javaparser.resolution.declarations.ResolvedValueDeclaration;
-import com.github.javaparser.symbolsolver.core.resolution.Context;
-import com.github.javaparser.symbolsolver.javaparsermodel.declarations.JavaParserSymbolDeclaration;
-import com.github.javaparser.symbolsolver.model.resolution.SymbolReference;
-import com.github.javaparser.symbolsolver.model.resolution.TypeSolver;
+import com.github.javaparser.resolution.Context;
+import com.github.javaparser.resolution.TypeSolver;
+import com.github.javaparser.symbolsolver.javaparsermodel.JavaParserFactory;
+import java.util.Collections;
+import java.util.LinkedList;
+import java.util.List;
 
-public class BlockStmtContext extends AbstractJavaParserContext<BlockStmt> {
+public class BlockStmtContext extends StatementContext<BlockStmt> {
 
     public BlockStmtContext(BlockStmt wrappedNode, TypeSolver typeSolver) {
         super(wrappedNode, typeSolver);
@@ -61,7 +58,8 @@ public class BlockStmtContext extends AbstractJavaParserContext<BlockStmt> {
         if (statement instanceof ExpressionStmt) {
             ExpressionStmt expressionStmt = (ExpressionStmt) statement;
             if (expressionStmt.getExpression() instanceof VariableDeclarationExpr) {
-                VariableDeclarationExpr variableDeclarationExpr = (VariableDeclarationExpr) expressionStmt.getExpression();
+                VariableDeclarationExpr variableDeclarationExpr =
+                        (VariableDeclarationExpr) expressionStmt.getExpression();
                 List<VariableDeclarator> variableDeclarators = new LinkedList<>();
                 variableDeclarators.addAll(variableDeclarationExpr.getVariables());
                 return variableDeclarators;
@@ -70,39 +68,28 @@ public class BlockStmtContext extends AbstractJavaParserContext<BlockStmt> {
         return Collections.emptyList();
     }
 
+    /**
+     * The following rule applies to a block statement S contained in a block that is not a switch block:
+     * - A pattern variable introduced by S is definitely matched at all the block statements following S, if any,
+     *   in the block.
+     *
+     * https://docs.oracle.com/javase/specs/jls/se22/html/jls-6.html#jls-6.3.2.1
+     */
     @Override
-    public SymbolReference<? extends ResolvedValueDeclaration> solveSymbol(String name) {
-        Optional<Context> optionalParent = getParent();
-        if (!optionalParent.isPresent()) {
-            return SymbolReference.unsolved(ResolvedValueDeclaration.class);
+    public List<TypePatternExpr> typePatternExprsExposedToChild(Node child) {
+        int position = wrappedNode.getStatements().indexOf(child);
+        if (position == -1) {
+            throw new RuntimeException();
         }
-
-        if (wrappedNode.getStatements().size() > 0) {
-            // tries to resolve a declaration from local variables defined in child statements
-            // or from parent node context
-            // for example resolve declaration for the MethodCallExpr a.method() in
-            // A a = this;
-            // {
-            //   a.method();
-            // }
-
-            List<VariableDeclarator> variableDeclarators = new LinkedList<>();
-            // find all variable declarators exposed to child
-            // given that we don't know the statement we are trying to resolve, we look for all variable declarations 
-            // defined in the context of the wrapped node whether it is located before or after the statement that interests us 
-            // because a variable cannot be (re)defined after having been used
-            wrappedNode.getStatements().getLast().ifPresent(stmt -> variableDeclarators.addAll(localVariablesExposedToChild(stmt)));
-            if (!variableDeclarators.isEmpty()) {
-                // FIXME: Work backwards from the current statement, to only consider declarations prior to this statement.
-                for (VariableDeclarator vd : variableDeclarators) {
-                    if (vd.getNameAsString().equals(name)) {
-                        return SymbolReference.solved(JavaParserSymbolDeclaration.localVar(vd, typeSolver));
-                    }
-                }
+        List<TypePatternExpr> patternExprs = new LinkedList<>();
+        for (int i = position - 1; i >= 0; i--) {
+            Context context = JavaParserFactory.getContext(wrappedNode.getStatement(i), typeSolver);
+            if (!(context instanceof StatementContext)) {
+                throw new IllegalStateException("Got non-statement context for statement");
             }
+            List<TypePatternExpr> introducedPatterns = ((StatementContext<?>) context).getIntroducedTypePatterns();
+            patternExprs.addAll(introducedPatterns);
         }
-
-        // Otherwise continue as normal...
-        return solveSymbolInParentContext(name);
+        return patternExprs;
     }
 }

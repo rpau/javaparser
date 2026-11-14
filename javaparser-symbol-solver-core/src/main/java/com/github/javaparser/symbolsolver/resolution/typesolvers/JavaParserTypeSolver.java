@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2015-2016 Federico Tomassetti
- * Copyright (C) 2017-2020 The JavaParser Team.
+ * Copyright (C) 2017-2026 The JavaParser Team.
  *
  * This file is part of JavaParser.
  *
@@ -25,33 +25,39 @@ import static com.github.javaparser.ParseStart.COMPILATION_UNIT;
 import static com.github.javaparser.ParserConfiguration.LanguageLevel.BLEEDING_EDGE;
 import static com.github.javaparser.Providers.provider;
 
+import com.github.javaparser.JavaParser;
+import com.github.javaparser.ParseResult;
+import com.github.javaparser.ParserConfiguration;
+import com.github.javaparser.ast.CompilationUnit;
+import com.github.javaparser.ast.Node;
+import com.github.javaparser.ast.modules.ModuleDeclaration;
+import com.github.javaparser.ast.modules.ModuleDirective;
+import com.github.javaparser.resolution.Navigator;
+import com.github.javaparser.resolution.TypeSolver;
+import com.github.javaparser.resolution.cache.Cache;
+import com.github.javaparser.resolution.declarations.ResolvedReferenceTypeDeclaration;
+import com.github.javaparser.resolution.model.SymbolReference;
+import com.github.javaparser.symbolsolver.JavaSymbolSolver;
+import com.github.javaparser.symbolsolver.cache.GuavaCache;
+import com.github.javaparser.symbolsolver.javaparsermodel.JavaParserFacade;
+import com.github.javaparser.symbolsolver.utils.FileUtils;
+import com.google.common.cache.CacheBuilder;
 import java.io.File;
-import java.io.FileNotFoundException;
+import java.io.IOException;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Objects;
-import java.util.Optional;
-import java.util.concurrent.ExecutionException;
-
-import com.github.javaparser.JavaParser;
-import com.github.javaparser.ParserConfiguration;
-import com.github.javaparser.ast.CompilationUnit;
-import com.github.javaparser.resolution.declarations.ResolvedReferenceTypeDeclaration;
-import com.github.javaparser.symbolsolver.javaparser.Navigator;
-import com.github.javaparser.symbolsolver.javaparsermodel.JavaParserFacade;
-import com.github.javaparser.symbolsolver.model.resolution.SymbolReference;
-import com.github.javaparser.symbolsolver.model.resolution.TypeSolver;
-import com.github.javaparser.symbolsolver.utils.FileUtils;
-import com.google.common.cache.Cache;
-import com.google.common.cache.CacheBuilder;
+import java.util.*;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * Defines a directory containing source code that should be used for solving symbols.
  * The directory must correspond to the root package of the files within.
+ * <p>
+ * The compilation units successfully parsed by this solver can be resolved through its root type solver,
+ * unless the parser configuration already provides a symbol resolver.
  *
  * @author Federico Tomassetti
  */
@@ -65,6 +71,7 @@ public class JavaParserTypeSolver implements TypeSolver {
     private final Cache<Path, Optional<CompilationUnit>> parsedFiles;
     private final Cache<Path, List<CompilationUnit>> parsedDirectories;
     private final Cache<String, SymbolReference<ResolvedReferenceTypeDeclaration>> foundTypes;
+    private final HashMap<String, List<String>> modulesToExportedPackages;
     private static final int CACHE_SIZE_UNSET = -1;
 
     public JavaParserTypeSolver(File srcDir) {
@@ -96,7 +103,7 @@ public class JavaParserTypeSolver implements TypeSolver {
         if (cacheSizeLimit != CACHE_SIZE_UNSET) {
             cacheBuilder.maximumSize(cacheSizeLimit);
         }
-        return cacheBuilder.build();
+        return new GuavaCache<>(cacheBuilder.build());
     }
 
     /**
@@ -115,14 +122,71 @@ public class JavaParserTypeSolver implements TypeSolver {
         parsedFiles = BuildCache(cacheSizeLimit);
         parsedDirectories = BuildCache(cacheSizeLimit);
         foundTypes = BuildCache(cacheSizeLimit);
+        modulesToExportedPackages = new HashMap<>();
+        populateModuleInfoCache(srcDir);
+    }
+
+    private void populateModuleInfoCache(Path srcDir) {
+        try (Stream<Path> files = Files.walk(srcDir)) {
+            List<ModuleDeclaration> modules = files.filter(path -> path.endsWith("module-info.java"))
+                    .map(this::parse)
+                    .filter(cu -> cu.isPresent() && cu.get().getModule().isPresent())
+                    .map(cu -> cu.get().getModule().get())
+                    .collect(Collectors.toList());
+
+            for (ModuleDeclaration module : modules) {
+                ArrayList<String> exportedPackages = new ArrayList<>();
+                for (ModuleDirective directive : module.getDirectives()) {
+                    if (directive.isModuleExportsDirective()) {
+                        exportedPackages.add(
+                                directive.asModuleExportsDirective().getNameAsString());
+                    }
+                }
+                modulesToExportedPackages.put(module.getNameAsString(), exportedPackages);
+            }
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    /**
+     * Create a {@link JavaParserTypeSolver} with a custom cache system.
+     *
+     * @param srcDir                    The source code directory for the type solver.
+     * @param javaParser                The {@link JavaParser} to be used when parsing .java files.
+     * @param parsedFilesCache          The cache to be used to store {@link CompilationUnit} that is associated with
+     *                                  a file.
+     * @param parsedDirectoriesCache    The cache to store the list of {@link CompilationUnit} in a given directory.
+     * @param foundTypesCache           The cache that associated a qualified name to its {@link SymbolReference}.
+     */
+    public JavaParserTypeSolver(
+            Path srcDir,
+            JavaParser javaParser,
+            Cache<Path, Optional<CompilationUnit>> parsedFilesCache,
+            Cache<Path, List<CompilationUnit>> parsedDirectoriesCache,
+            Cache<String, SymbolReference<ResolvedReferenceTypeDeclaration>> foundTypesCache) {
+        Objects.requireNonNull(srcDir, "The srcDir can't be null.");
+        Objects.requireNonNull(javaParser, "The javaParser can't be null.");
+        Objects.requireNonNull(parsedFilesCache, "The parsedFilesCache can't be null.");
+        Objects.requireNonNull(parsedDirectoriesCache, "The parsedDirectoriesCache can't be null.");
+        Objects.requireNonNull(foundTypesCache, "The foundTypesCache can't be null.");
+
+        if (!Files.exists(srcDir) || !Files.isDirectory(srcDir)) {
+            throw new IllegalStateException("SrcDir does not exist or is not a directory: " + srcDir);
+        }
+
+        this.srcDir = srcDir;
+        this.javaParser = javaParser;
+        this.parsedFiles = parsedFilesCache;
+        this.parsedDirectories = parsedDirectoriesCache;
+        this.foundTypes = foundTypesCache;
+        modulesToExportedPackages = new HashMap<>();
+        populateModuleInfoCache(srcDir);
     }
 
     @Override
     public String toString() {
-        return "JavaParserTypeSolver{" +
-                "srcDir=" + srcDir +
-                ", parent=" + parent +
-                '}';
+        return "JavaParserTypeSolver{" + "srcDir=" + srcDir + ", parent=" + parent + '}';
     }
 
     @Override
@@ -142,26 +206,44 @@ public class JavaParserTypeSolver implements TypeSolver {
         this.parent = parent;
     }
 
+    /**
+     * Attaches a symbol resolver to a unit parsed by this solver, unless its parser configuration already provided one,
+     * so that the nodes reached through {@code toAst()} can be resolved.
+     */
+    private void injectSymbolResolverIfAbsent(CompilationUnit cu) {
+        if (!cu.containsData(Node.SYMBOL_RESOLVER_KEY)) {
+            new JavaSymbolSolver(getRoot()).inject(cu);
+        }
+    }
+
     private Optional<CompilationUnit> parse(Path srcFile) {
         try {
-            return parsedFiles.get(srcFile.toAbsolutePath(), () -> {
-                try {
-                    if (!Files.exists(srcFile) || !Files.isRegularFile(srcFile)) {
-                        return Optional.empty();
-                    }
+            Optional<Optional<CompilationUnit>> cachedParsedFile = parsedFiles.get(srcFile.toAbsolutePath());
+            // If the value is already cached
+            if (cachedParsedFile.isPresent()) {
+                return cachedParsedFile.get();
+            }
 
-                    // JavaParser only allow one parse at time.
-                    synchronized (javaParser) {
-                        return javaParser.parse(COMPILATION_UNIT, provider(srcFile))
-                                .getResult()
-                                .map(cu -> cu.setStorage(srcFile));
-                    }
-                } catch (FileNotFoundException e) {
-                    throw new RuntimeException("Issue while parsing while type solving: " + srcFile.toAbsolutePath(), e);
-                }
-            });
-        } catch (ExecutionException e) {
-            throw new RuntimeException(e);
+            // Otherwise load it
+            if (!Files.exists(srcFile) || !Files.isRegularFile(srcFile)) {
+                parsedFiles.put(srcFile.toAbsolutePath(), Optional.empty());
+                return Optional.empty();
+            }
+
+            // JavaParser only allow one parse at time.
+            synchronized (javaParser) {
+                ParseResult<CompilationUnit> parseResult = javaParser.parse(
+                        COMPILATION_UNIT,
+                        provider(srcFile, javaParser.getParserConfiguration().getCharacterEncoding()));
+                // As with ParserConfiguration, a unit parsed with problems gets no symbol resolver
+                parseResult.ifSuccessful(this::injectSymbolResolverIfAbsent);
+                Optional<CompilationUnit> compilationUnit =
+                        parseResult.getResult().map(cu -> cu.setStorage(srcFile));
+                parsedFiles.put(srcFile.toAbsolutePath(), compilationUnit);
+                return compilationUnit;
+            }
+        } catch (IOException e) {
+            throw new RuntimeException("Issue while parsing while type solving: " + srcFile.toAbsolutePath(), e);
         }
     }
 
@@ -179,41 +261,46 @@ public class JavaParserTypeSolver implements TypeSolver {
 
     private List<CompilationUnit> parseDirectory(Path srcDirectory, boolean recursively) {
         try {
-            return parsedDirectories.get(srcDirectory.toAbsolutePath(), () -> {
-                List<CompilationUnit> units = new ArrayList<>();
-                if (Files.exists(srcDirectory)) {
-                    try (DirectoryStream<Path> srcDirectoryStream = Files.newDirectoryStream(srcDirectory)) {
-                        srcDirectoryStream
-                                .forEach(file -> {
-                                    if (file.getFileName().toString().toLowerCase().endsWith(".java")) {
-                                        parse(file).ifPresent(units::add);
-                                    } else if (recursively && file.toFile().isDirectory()) {
-                                        units.addAll(parseDirectoryRecursively(file));
-                                    }
-                                });
-                    }
-                }
-                return units;
-            });
-        } catch (ExecutionException e) {
-            throw new RuntimeException(e);
-        }
+            Optional<List<CompilationUnit>> cachedValue = parsedDirectories.get(srcDirectory.toAbsolutePath());
+            if (cachedValue.isPresent()) {
+                return cachedValue.get();
+            }
 
+            // If not cached, we need to load it
+            List<CompilationUnit> units = new ArrayList<>();
+            if (Files.exists(srcDirectory)) {
+                try (DirectoryStream<Path> srcDirectoryStream = Files.newDirectoryStream(srcDirectory)) {
+                    srcDirectoryStream.forEach(file -> {
+                        if (file.getFileName()
+                                .toString()
+                                .toLowerCase(Locale.ROOT)
+                                .endsWith(".java")) {
+                            parse(file).ifPresent(units::add);
+                        } else if (recursively && file.toFile().isDirectory()) {
+                            units.addAll(parseDirectoryRecursively(file));
+                        }
+                    });
+                }
+            }
+            parsedDirectories.put(srcDirectory.toAbsolutePath(), units);
+            return units;
+        } catch (IOException e) {
+            throw new RuntimeException(
+                    "Unable to parse directory due to an exception. Directory:" + srcDirectory.toAbsolutePath(), e);
+        }
     }
 
     @Override
     public SymbolReference<ResolvedReferenceTypeDeclaration> tryToSolveType(String name) {
-        try {
-            return foundTypes.get(name, () -> {
-                SymbolReference<ResolvedReferenceTypeDeclaration> result = tryToSolveTypeUncached(name);
-                if (result.isSolved()) {
-                    return SymbolReference.solved(result.getCorrespondingDeclaration());
-                }
-                return result;
-            });
-        } catch (ExecutionException e) {
-            throw new RuntimeException(e);
+        Optional<SymbolReference<ResolvedReferenceTypeDeclaration>> cachedValue = foundTypes.get(name);
+        if (cachedValue.isPresent()) {
+            return cachedValue.get();
         }
+
+        // Otherwise load it
+        SymbolReference<ResolvedReferenceTypeDeclaration> result = tryToSolveTypeUncached(name);
+        foundTypes.put(name, result);
+        return result;
     }
 
     private SymbolReference<ResolvedReferenceTypeDeclaration> tryToSolveTypeUncached(String name) {
@@ -222,8 +309,7 @@ public class JavaParserTypeSolver implements TypeSolver {
         for (int i = nameElements.length; i > 0; i--) {
             StringBuilder filePath = new StringBuilder(srcDir.toAbsolutePath().toString());
             for (int j = 0; j < i; j++) {
-                filePath.append(File.separator)
-                        .append(nameElements[j]);
+                filePath.append(File.separator).append(nameElements[j]);
             }
             filePath.append(".java");
 
@@ -241,11 +327,11 @@ public class JavaParserTypeSolver implements TypeSolver {
                 Path srcFile = Paths.get(filePath.toString());
                 Optional<CompilationUnit> compilationUnit = parse(srcFile);
                 if (compilationUnit.isPresent()) {
-                    Optional<com.github.javaparser.ast.body.TypeDeclaration<?>> astTypeDeclaration = Navigator
-                            .findType(compilationUnit.get(), typeName.toString());
+                    Optional<com.github.javaparser.ast.body.TypeDeclaration<?>> astTypeDeclaration =
+                            Navigator.findType(compilationUnit.get(), typeName.toString());
                     if (astTypeDeclaration.isPresent()) {
-                        return SymbolReference
-                                .solved(JavaParserFacade.get(this).getTypeDeclaration(astTypeDeclaration.get()));
+                        return SymbolReference.solved(
+                                JavaParserFacade.get(this).getTypeDeclaration(astTypeDeclaration.get()));
                     }
                 }
                 dirToParse = srcFile.getParent().normalize().toString();
@@ -258,17 +344,31 @@ public class JavaParserTypeSolver implements TypeSolver {
             if (FileUtils.isValidPath(dirToParse)) {
                 List<CompilationUnit> compilationUnits = parseDirectory(Paths.get(dirToParse));
                 for (CompilationUnit compilationUnit : compilationUnits) {
-                    Optional<com.github.javaparser.ast.body.TypeDeclaration<?>> astTypeDeclaration = Navigator
-                            .findType(compilationUnit, typeName.toString());
+                    Optional<com.github.javaparser.ast.body.TypeDeclaration<?>> astTypeDeclaration =
+                            Navigator.findType(compilationUnit, typeName.toString());
                     if (astTypeDeclaration.isPresent()) {
-                        return SymbolReference
-                                .solved(JavaParserFacade.get(this).getTypeDeclaration(astTypeDeclaration.get()));
+                        return SymbolReference.solved(
+                                JavaParserFacade.get(this).getTypeDeclaration(astTypeDeclaration.get()));
                     }
                 }
             }
         }
 
-        return SymbolReference.unsolved(ResolvedReferenceTypeDeclaration.class);
+        return SymbolReference.unsolved();
     }
 
+    @Override
+    public SymbolReference<ResolvedReferenceTypeDeclaration> tryToSolveTypeInModule(
+            String qualifiedModuleName, String simpleTypeName) {
+        if (modulesToExportedPackages.containsKey(qualifiedModuleName)) {
+            for (String packageCandidate : modulesToExportedPackages.get(qualifiedModuleName)) {
+                SymbolReference<ResolvedReferenceTypeDeclaration> maybeType =
+                        tryToSolveType(packageCandidate + "." + simpleTypeName);
+                if (maybeType.isSolved()) {
+                    return maybeType;
+                }
+            }
+        }
+        return SymbolReference.unsolved();
+    }
 }

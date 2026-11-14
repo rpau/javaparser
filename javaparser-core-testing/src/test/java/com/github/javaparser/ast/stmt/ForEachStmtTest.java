@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2007-2010 Júlio Vilmar Gesser.
- * Copyright (C) 2011, 2013-2019 The JavaParser Team.
+ * Copyright (C) 2011, 2013-2026 The JavaParser Team.
  *
  * This file is part of JavaParser.
  *
@@ -21,17 +21,21 @@
 
 package com.github.javaparser.ast.stmt;
 
+import static org.junit.jupiter.api.Assertions.*;
+
+import com.github.javaparser.JavaParserAdapter;
+import com.github.javaparser.StaticJavaParser;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.PrimitiveType;
 import org.junit.jupiter.api.Test;
 
-import static com.github.javaparser.StaticJavaParser.parseStatement;
-import static org.junit.jupiter.api.Assertions.*;
-
 class ForEachStmtTest {
+
+    private final JavaParserAdapter parser = StaticJavaParser.newParserAdapter();
+
     @Test
     void nonFinalPrimitive() {
-        ForEachStmt statement = parseStatement("for (int i : ints) {}").asForEachStmt();
+        ForEachStmt statement = parser.parseStatement("for (int i : ints) {}").asForEachStmt();
         assertFalse(statement.hasFinalVariable());
         assertEquals(PrimitiveType.intType(), statement.getVariableDeclarator().getType());
         assertEquals("i", statement.getVariableDeclarator().getName().getIdentifier());
@@ -39,9 +43,12 @@ class ForEachStmtTest {
 
     @Test
     void finalNonPrimitive() {
-        ForEachStmt statement = parseStatement("for (final Object o : objs) {}").asForEachStmt();
+        ForEachStmt statement =
+                parser.parseStatement("for (final Object o : objs) {}").asForEachStmt();
         assertTrue(statement.hasFinalVariable());
-        assertEquals(new ClassOrInterfaceType(null, "Object"), statement.getVariableDeclarator().getType());
+        assertEquals(
+                new ClassOrInterfaceType(null, "Object"),
+                statement.getVariableDeclarator().getType());
         assertEquals("o", statement.getVariableDeclarator().getName().getIdentifier());
     }
 }

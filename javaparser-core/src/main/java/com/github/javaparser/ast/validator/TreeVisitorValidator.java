@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2007-2010 Júlio Vilmar Gesser.
- * Copyright (C) 2011, 2013-2021 The JavaParser Team.
+ * Copyright (C) 2011, 2013-2026 The JavaParser Team.
  *
  * This file is part of JavaParser.
  *
@@ -18,7 +18,6 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU Lesser General Public License for more details.
  */
-
 package com.github.javaparser.ast.validator;
 
 import com.github.javaparser.ast.Node;
@@ -27,6 +26,7 @@ import com.github.javaparser.ast.Node;
  * A validator that walks the whole tree, visiting every node.
  */
 public class TreeVisitorValidator implements Validator {
+
     private final Validator validator;
 
     public TreeVisitorValidator(Validator validator) {
@@ -35,9 +35,6 @@ public class TreeVisitorValidator implements Validator {
 
     @Override
     public final void accept(Node node, ProblemReporter reporter) {
-        validator.accept(node, reporter);
-        for (Node child : node.getChildNodes()) {
-            accept(child, reporter);
-        }
+        node.walk(n -> validator.accept(n, reporter));
     }
 }

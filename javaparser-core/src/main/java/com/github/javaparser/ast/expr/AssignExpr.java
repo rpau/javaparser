@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2007-2010 Júlio Vilmar Gesser.
- * Copyright (C) 2011, 2013-2021 The JavaParser Team.
+ * Copyright (C) 2011, 2013-2026 The JavaParser Team.
  *
  * This file is part of JavaParser.
  *
@@ -20,6 +20,8 @@
  */
 package com.github.javaparser.ast.expr;
 
+import static com.github.javaparser.utils.Utils.assertNotNull;
+
 import com.github.javaparser.TokenRange;
 import com.github.javaparser.ast.AllFieldsConstructor;
 import com.github.javaparser.ast.Generated;
@@ -33,10 +35,9 @@ import com.github.javaparser.metamodel.JavaParserMetaModel;
 import com.github.javaparser.printer.Stringable;
 import java.util.Optional;
 import java.util.function.Consumer;
-import static com.github.javaparser.utils.Utils.assertNotNull;
 
 /**
- * An assignment expression. It supports the operators that are found the the AssignExpr.Operator enum.
+ * An assignment expression. It supports the operators that are found the AssignExpr.Operator enum.
  * <br>{@code a=5}
  * <br>{@code time+=500}
  * <br>{@code watch.time+=500}
@@ -48,7 +49,6 @@ import static com.github.javaparser.utils.Utils.assertNotNull;
 public class AssignExpr extends Expression {
 
     public enum Operator implements Stringable {
-
         ASSIGN("="),
         PLUS("+="),
         MINUS("-="),
@@ -73,7 +73,7 @@ public class AssignExpr extends Expression {
         }
 
         public Optional<BinaryExpr.Operator> toBinaryOperator() {
-            switch(this) {
+            switch (this) {
                 case PLUS:
                     return Optional.of(BinaryExpr.Operator.PLUS);
                 case MINUS:
@@ -174,8 +174,7 @@ public class AssignExpr extends Expression {
             return this;
         }
         notifyPropertyChange(ObservableProperty.TARGET, this.target, target);
-        if (this.target != null)
-            this.target.setParentNode(null);
+        if (this.target != null) this.target.setParentNode(null);
         this.target = target;
         setAsParentNodeOf(target);
         return this;
@@ -188,19 +187,10 @@ public class AssignExpr extends Expression {
             return this;
         }
         notifyPropertyChange(ObservableProperty.VALUE, this.value, value);
-        if (this.value != null)
-            this.value.setParentNode(null);
+        if (this.value != null) this.value.setParentNode(null);
         this.value = value;
         setAsParentNodeOf(value);
         return this;
-    }
-
-    @Override
-    @Generated("com.github.javaparser.generator.core.node.RemoveMethodGenerator")
-    public boolean remove(Node node) {
-        if (node == null)
-            return false;
-        return super.remove(node);
     }
 
     @Override
@@ -218,8 +208,9 @@ public class AssignExpr extends Expression {
     @Override
     @Generated("com.github.javaparser.generator.core.node.ReplaceMethodGenerator")
     public boolean replace(Node node, Node replacementNode) {
-        if (node == null)
+        if (node == null) {
             return false;
+        }
         if (node == target) {
             setTarget((Expression) replacementNode);
             return true;

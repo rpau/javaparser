@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2007-2010 Júlio Vilmar Gesser.
- * Copyright (C) 2011, 2013-2019 The JavaParser Team.
+ * Copyright (C) 2011, 2013-2026 The JavaParser Team.
  *
  * This file is part of JavaParser.
  *
@@ -21,13 +21,19 @@
 
 package com.github.javaparser.ast.expr;
 
-import org.junit.jupiter.api.Test;
-
-import static com.github.javaparser.StaticJavaParser.parseSimpleName;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verifyNoInteractions;
+
+import com.github.javaparser.JavaParserAdapter;
+import com.github.javaparser.StaticJavaParser;
+import com.github.javaparser.ast.observer.AstObserver;
+import org.junit.jupiter.api.Test;
 
 class SimpleNameTest {
+
+    private final JavaParserAdapter parser = StaticJavaParser.newParserAdapter();
 
     @Test
     void defaultConstructorSetsIdentifierToEmpty() {
@@ -46,7 +52,21 @@ class SimpleNameTest {
 
     @Test
     void unicodeEscapesArePreservedInIdentifiers() {
-        SimpleName name = parseSimpleName("xxx\\u2122xxx");
+        SimpleName name = parser.parseSimpleName("xxx\\u2122xxx");
         assertEquals("xxx\\u2122xxx", name.asString());
+    }
+
+    @Test
+    void issue4791Test() {
+        String a = new String("someName");
+        String b = new String("someName");
+        SimpleName expression = new SimpleName(a);
+
+        AstObserver observer = mock(AstObserver.class);
+        expression.register(observer);
+
+        expression.setIdentifier(b);
+
+        verifyNoInteractions(observer);
     }
 }

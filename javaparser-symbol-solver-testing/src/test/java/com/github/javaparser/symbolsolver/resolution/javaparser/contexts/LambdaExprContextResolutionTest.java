@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2015-2016 Federico Tomassetti
- * Copyright (C) 2017-2019 The JavaParser Team.
+ * Copyright (C) 2017-2026 The JavaParser Team.
  *
  * This file is part of JavaParser.
  *
@@ -21,32 +21,33 @@
 
 package com.github.javaparser.symbolsolver.resolution.javaparser.contexts;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import com.github.javaparser.StaticJavaParser;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.VariableDeclarator;
+import com.github.javaparser.ast.expr.AssignExpr;
 import com.github.javaparser.ast.expr.CastExpr;
 import com.github.javaparser.ast.expr.LambdaExpr;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.stmt.ReturnStmt;
-import com.github.javaparser.symbolsolver.core.resolution.Context;
-import com.github.javaparser.symbolsolver.javaparser.Navigator;
+import com.github.javaparser.resolution.Context;
+import com.github.javaparser.resolution.Navigator;
+import com.github.javaparser.resolution.TypeSolver;
+import com.github.javaparser.resolution.model.Value;
 import com.github.javaparser.symbolsolver.javaparsermodel.contexts.LambdaExprContext;
-import com.github.javaparser.symbolsolver.model.resolution.TypeSolver;
-import com.github.javaparser.symbolsolver.model.resolution.Value;
 import com.github.javaparser.symbolsolver.resolution.AbstractResolutionTest;
 import com.github.javaparser.symbolsolver.resolution.typesolvers.CombinedTypeSolver;
 import com.github.javaparser.symbolsolver.resolution.typesolvers.JavaParserTypeSolver;
 import com.github.javaparser.symbolsolver.resolution.typesolvers.ReflectionTypeSolver;
 import com.github.javaparser.symbolsolver.utils.LeanParserConfiguration;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Optional;
-
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 /**
  * @author Malte Langkabel
@@ -67,14 +68,15 @@ class LambdaExprContextResolutionTest extends AbstractResolutionTest {
         com.github.javaparser.ast.body.ClassOrInterfaceDeclaration clazz = Navigator.demandClass(cu, "Agenda");
         MethodDeclaration method = Navigator.demandMethod(clazz, "lambdaMap");
         ReturnStmt returnStmt = Navigator.demandReturnStmt(method);
-        MethodCallExpr methodCallExpr = (MethodCallExpr) returnStmt.getExpression().get();
+        MethodCallExpr methodCallExpr =
+                (MethodCallExpr) returnStmt.getExpression().get();
         LambdaExpr lambdaExpr = (LambdaExpr) methodCallExpr.getArguments().get(0);
 
         Context context = new LambdaExprContext(lambdaExpr, typeSolver);
 
         Optional<Value> ref = context.solveSymbolAsValue("p");
         assertTrue(ref.isPresent());
-        assertEquals("? super java.lang.String", ref.get().getType().describe());
+        assertEquals("java.lang.String", ref.get().getType().describe());
     }
 
     @Test
@@ -103,7 +105,8 @@ class LambdaExprContextResolutionTest extends AbstractResolutionTest {
 
         com.github.javaparser.ast.body.ClassOrInterfaceDeclaration clazz = Navigator.demandClass(cu, "Agenda");
         MethodDeclaration method = Navigator.demandMethod(clazz, "testFunctionalVar");
-        VariableDeclarator varDecl = Navigator.demandVariableDeclaration(method, "a").get();
+        VariableDeclarator varDecl =
+                Navigator.demandVariableDeclaration(method, "a").get();
         LambdaExpr lambdaExpr = (LambdaExpr) varDecl.getInitializer().get();
 
         Path src = adaptPath("src/test/resources");
@@ -124,13 +127,73 @@ class LambdaExprContextResolutionTest extends AbstractResolutionTest {
 
         com.github.javaparser.ast.body.ClassOrInterfaceDeclaration clazz = Navigator.demandClass(cu, "Agenda");
         MethodDeclaration method = Navigator.demandMethod(clazz, "testCast");
-        VariableDeclarator varDecl = Navigator.demandVariableDeclaration(method, "a").get();
-        LambdaExpr lambdaExpr = ((CastExpr) varDecl.getInitializer().get()).getExpression().asLambdaExpr();
+        VariableDeclarator varDecl =
+                Navigator.demandVariableDeclaration(method, "a").get();
+        LambdaExpr lambdaExpr =
+                ((CastExpr) varDecl.getInitializer().get()).getExpression().asLambdaExpr();
 
         Path src = adaptPath("src/test/resources");
         CombinedTypeSolver combinedTypeSolver = new CombinedTypeSolver();
         combinedTypeSolver.add(new ReflectionTypeSolver());
         combinedTypeSolver.add(new JavaParserTypeSolver(src, new LeanParserConfiguration()));
+
+        Context context = new LambdaExprContext(lambdaExpr, combinedTypeSolver);
+
+        Optional<Value> ref = context.solveSymbolAsValue("p");
+        assertTrue(ref.isPresent());
+        assertEquals("java.lang.String", ref.get().getType().describe());
+    }
+
+    @Test
+    // see https://github.com/javaparser/javaparser/issues/2716
+    void solveParameterOfLambdaInStaticGenericMethodWithOuterContextInference() {
+        // When Comparator.comparing(lambda) is passed to stream.sorted(), the lambda
+        // parameter type cannot be inferred from comparing's scope alone: comparing is
+        // a static method, so there is no receiver instance whose type arguments could
+        // substitute its type parameter T.
+        //
+        // The outer call provides the missing context: sorted() on Stream<String>
+        // expects Comparator<? super String>, so the inference engine matches
+        // comparing's return type Comparator<T> against Comparator<? super String>
+        // and concludes T = ? super String.  The lambda parameter therefore has
+        // type "java.lang.String".
+        String source = "import java.util.Arrays;\n"
+                + "import java.util.Comparator;\n"
+                + "import java.util.List;\n"
+                + "public class Test {\n"
+                + "    void test() {\n"
+                + "        List<String> list = Arrays.asList(\"b\", \"a\");\n"
+                + "        list.stream().sorted(Comparator.comparing(s -> s.toLowerCase()));\n"
+                + "    }\n"
+                + "}";
+        CompilationUnit cu = StaticJavaParser.parse(source);
+        MethodCallExpr comparingCall = cu.findAll(MethodCallExpr.class).stream()
+                .filter(mce -> mce.getNameAsString().equals("comparing"))
+                .findFirst()
+                .get();
+        LambdaExpr lambdaExpr = (LambdaExpr) comparingCall.getArguments().get(0);
+
+        Context context = new LambdaExprContext(lambdaExpr, typeSolver);
+        Optional<Value> ref = context.solveSymbolAsValue("s");
+        assertTrue(ref.isPresent());
+        assertEquals("java.lang.String", ref.get().getType().describe());
+    }
+
+    @Test
+    // see https://github.com/javaparser/javaparser/issues/4399
+    void solveParameterOfLambdaInAssignExpr() {
+
+        Path src = adaptPath("src/test/resources");
+        CombinedTypeSolver combinedTypeSolver = new CombinedTypeSolver();
+        combinedTypeSolver.add(new ReflectionTypeSolver());
+        combinedTypeSolver.add(new JavaParserTypeSolver(src, new LeanParserConfiguration()));
+
+        CompilationUnit cu = parseSample("Lambda", combinedTypeSolver);
+
+        com.github.javaparser.ast.body.ClassOrInterfaceDeclaration clazz = Navigator.demandClass(cu, "Agenda");
+        MethodDeclaration method = Navigator.demandMethod(clazz, "testInAssignExpr");
+        AssignExpr expr = Navigator.demandNodeOfGivenClass(method, AssignExpr.class);
+        LambdaExpr lambdaExpr = expr.getValue().asLambdaExpr();
 
         Context context = new LambdaExprContext(lambdaExpr, combinedTypeSolver);
 

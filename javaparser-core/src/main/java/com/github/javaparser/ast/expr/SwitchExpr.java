@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2007-2010 Júlio Vilmar Gesser.
- * Copyright (C) 2011, 2013-2021 The JavaParser Team.
+ * Copyright (C) 2011, 2013-2026 The JavaParser Team.
  *
  * This file is part of JavaParser.
  *
@@ -20,6 +20,8 @@
  */
 package com.github.javaparser.ast.expr;
 
+import static com.github.javaparser.utils.Utils.assertNotNull;
+
 import com.github.javaparser.TokenRange;
 import com.github.javaparser.ast.AllFieldsConstructor;
 import com.github.javaparser.ast.Generated;
@@ -35,7 +37,6 @@ import com.github.javaparser.metamodel.JavaParserMetaModel;
 import com.github.javaparser.metamodel.SwitchExprMetaModel;
 import java.util.Optional;
 import java.util.function.Consumer;
-import static com.github.javaparser.utils.Utils.assertNotNull;
 
 /**
  * <h1>The switch expression</h1>
@@ -116,8 +117,7 @@ public class SwitchExpr extends Expression implements SwitchNode {
             return this;
         }
         notifyPropertyChange(ObservableProperty.ENTRIES, this.entries, entries);
-        if (this.entries != null)
-            this.entries.setParentNode(null);
+        if (this.entries != null) this.entries.setParentNode(null);
         this.entries = entries;
         setAsParentNodeOf(entries);
         return this;
@@ -130,8 +130,7 @@ public class SwitchExpr extends Expression implements SwitchNode {
             return this;
         }
         notifyPropertyChange(ObservableProperty.SELECTOR, this.selector, selector);
-        if (this.selector != null)
-            this.selector.setParentNode(null);
+        if (this.selector != null) this.selector.setParentNode(null);
         this.selector = selector;
         setAsParentNodeOf(selector);
         return this;
@@ -140,8 +139,9 @@ public class SwitchExpr extends Expression implements SwitchNode {
     @Override
     @Generated("com.github.javaparser.generator.core.node.RemoveMethodGenerator")
     public boolean remove(Node node) {
-        if (node == null)
+        if (node == null) {
             return false;
+        }
         for (int i = 0; i < entries.size(); i++) {
             if (entries.get(i) == node) {
                 entries.remove(i);
@@ -160,8 +160,9 @@ public class SwitchExpr extends Expression implements SwitchNode {
     @Override
     @Generated("com.github.javaparser.generator.core.node.ReplaceMethodGenerator")
     public boolean replace(Node node, Node replacementNode) {
-        if (node == null)
+        if (node == null) {
             return false;
+        }
         for (int i = 0; i < entries.size(); i++) {
             if (entries.get(i) == node) {
                 entries.set(i, (SwitchEntry) replacementNode);

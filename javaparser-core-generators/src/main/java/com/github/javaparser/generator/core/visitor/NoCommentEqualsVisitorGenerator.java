@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2007-2010 Júlio Vilmar Gesser.
- * Copyright (C) 2011, 2013-2021 The JavaParser Team.
+ * Copyright (C) 2011, 2013-2026 The JavaParser Team.
  *
  * This file is part of JavaParser.
  *
@@ -39,8 +39,8 @@ public class NoCommentEqualsVisitorGenerator extends VisitorGenerator {
     }
 
     @Override
-    protected void generateVisitMethodBody(BaseNodeMetaModel node, MethodDeclaration visitMethod,
-                                           CompilationUnit compilationUnit) {
+    protected void generateVisitMethodBody(
+            BaseNodeMetaModel node, MethodDeclaration visitMethod, CompilationUnit compilationUnit) {
         visitMethod.getParameters().forEach(p -> p.setFinal(true));
 
         BlockStmt body = visitMethod.getBody().get();
@@ -48,14 +48,13 @@ public class NoCommentEqualsVisitorGenerator extends VisitorGenerator {
 
         if (!(node.equals(JavaParserMetaModel.lineCommentMetaModel)
                 || node.equals(JavaParserMetaModel.blockCommentMetaModel)
-                || node.equals(JavaParserMetaModel.javadocCommentMetaModel))) {
+                || node.equals(JavaParserMetaModel.traditionalJavadocCommentMetaModel))) {
 
             body.addStatement(f("final %s n2 = (%s) arg;", node.getTypeName(), node.getTypeName()));
 
             for (PropertyMetaModel field : node.getAllPropertyMetaModels()) {
                 final String getter = field.getGetterMethodName() + "()";
-                if (field.equals(JavaParserMetaModel.nodeMetaModel.commentPropertyMetaModel))
-                    continue;
+                if (field.equals(JavaParserMetaModel.nodeMetaModel.commentPropertyMetaModel)) continue;
                 if (field.getNodeReference().isPresent()) {
                     if (field.isNodeList()) {
                         body.addStatement(f("if (!nodesEquals(n.%s, n2.%s)) return false;", getter, getter));

@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2007-2010 Júlio Vilmar Gesser.
- * Copyright (C) 2011, 2013-2021 The JavaParser Team.
+ * Copyright (C) 2011, 2013-2026 The JavaParser Team.
  *
  * This file is part of JavaParser.
  *
@@ -18,31 +18,46 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU Lesser General Public License for more details.
  */
-
 package com.github.javaparser.metamodel;
-
-import com.github.javaparser.ast.Node;
-
-import java.lang.reflect.Field;
-import java.util.Optional;
 
 import static com.github.javaparser.utils.CodeGenerationUtils.getterName;
 import static com.github.javaparser.utils.CodeGenerationUtils.setterName;
+
+import com.github.javaparser.ast.Node;
+import java.lang.reflect.Field;
+import java.util.Objects;
+import java.util.Optional;
 
 /**
  * Meta-data about a property of a node in the AST.
  */
 public class PropertyMetaModel {
+
     private final BaseNodeMetaModel containingNodeMetaModel;
+
     private final String name;
+
     private final Class<?> type;
+
     private final Optional<BaseNodeMetaModel> nodeReference;
+
     private final boolean isOptional;
+
     private final boolean isNonEmpty;
+
     private final boolean isNodeList;
+
     private final boolean hasWildcard;
 
-    public PropertyMetaModel(BaseNodeMetaModel containingNodeMetaModel, String name, Class<?> type, Optional<BaseNodeMetaModel> nodeReference, boolean isOptional, boolean isNonEmpty, boolean isNodeList, boolean hasWildcard) {
+    public PropertyMetaModel(
+            BaseNodeMetaModel containingNodeMetaModel,
+            String name,
+            Class<?> type,
+            Optional<BaseNodeMetaModel> nodeReference,
+            boolean isOptional,
+            boolean isNonEmpty,
+            boolean isNodeList,
+            boolean hasWildcard) {
         this.containingNodeMetaModel = containingNodeMetaModel;
         this.name = name;
         this.type = type;
@@ -156,24 +171,28 @@ public class PropertyMetaModel {
         return "(" + getTypeName() + ")\t" + containingNodeMetaModel + "#" + name;
     }
 
+    /**
+     * Two properties are equal if they have the same runtime class and equal containing node meta models,
+     * names, and types.
+     *
+     * <p>The containing node meta models may both be {@code null}. A {@code null} containing node meta model
+     * is not equal to a non-{@code null} one.
+     *
+     * <p>Inherited properties retain the meta model of the node that declares them.
+     */
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
-
         PropertyMetaModel that = (PropertyMetaModel) o;
-
         if (!name.equals(that.name)) return false;
         if (!type.equals(that.type)) return false;
-
-        return true;
+        return Objects.equals(containingNodeMetaModel, that.containingNodeMetaModel);
     }
 
     @Override
     public int hashCode() {
-        int result = name.hashCode();
-        result = 31 * result + type.hashCode();
-        return result;
+        return Objects.hash(containingNodeMetaModel, name, type);
     }
 
     /**
